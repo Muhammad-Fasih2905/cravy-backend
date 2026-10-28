@@ -7,7 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .config import settings
-from .db import Base, engine
+from .db import Base, SessionLocal, engine
+from .payments import ensure_payment_defaults
 from .routers import admin, catalog, orders
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,8 @@ app.include_router(admin.router)
 def _create_tables_for_dev():
     # Dev convenience. In production use Alembic: `alembic upgrade head`.
     Base.metadata.create_all(engine)
+    with SessionLocal() as db:  # make sure COD + Easypaisa are configured even on a fresh database
+        ensure_payment_defaults(db)
 
 
 @app.get("/health")

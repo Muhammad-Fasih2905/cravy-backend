@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .config import settings as _cfg
 from .db import Base
 
 
@@ -87,9 +88,9 @@ class BusinessSettings(Base):
     min_order_value: Mapped[int] = mapped_column(Integer, default=0)
     tax_percent: Mapped[int] = mapped_column(Integer, default=0)  # added on top of (subtotal - discount)
     cod_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    easypaisa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    easypaisa_name: Mapped[str | None] = mapped_column(String(80))
-    easypaisa_number: Mapped[str | None] = mapped_column(String(30))
+    easypaisa_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    easypaisa_name: Mapped[str | None] = mapped_column(String(80), default=lambda: _cfg.easypaisa_account_name)
+    easypaisa_number: Mapped[str | None] = mapped_column(String(30), default=lambda: _cfg.easypaisa_number)
     bank_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     bank_name: Mapped[str | None] = mapped_column(String(80))
     bank_account_title: Mapped[str | None] = mapped_column(String(80))
@@ -140,10 +141,11 @@ class Payment(Base):
     __tablename__ = "payments"
     id: Mapped[int] = mapped_column(primary_key=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), unique=True)
-    method: Mapped[str] = mapped_column(String(20))  # COD | EASYPAISA | BANK_TRANSFER | GATEWAY
+    method: Mapped[str] = mapped_column(String(20))  # COD | EASYPAISA
+    # COD: UNPAID -> PAID (cash collected).  EASYPAISA: AWAITING_PAYMENT -> PENDING_VERIFICATION -> PAID (or FAILED)
     status: Mapped[str] = mapped_column(String(25), default="UNPAID")
     amount: Mapped[int] = mapped_column(Integer)
-    transaction_ref: Mapped[str | None] = mapped_column(String(120))
+    transaction_ref: Mapped[str | None] = mapped_column(String(120), unique=True)  # one Easypaisa TID can pay only one order
     receipt_path: Mapped[str | None] = mapped_column(String(300))
     admin_note: Mapped[str | None] = mapped_column(String(300))
     order: Mapped[Order] = relationship(back_populates="payment")

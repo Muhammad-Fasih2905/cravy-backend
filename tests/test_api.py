@@ -15,10 +15,6 @@ def client(monkeypatch):
     monkeypatch.setattr(seed, "engine", eng)
     monkeypatch.setattr(seed, "SessionLocal", Session)
     seed.run()
-    with Session() as s:  # enable COD only is default; enable bank for payment tests
-        st = s.get(models.BusinessSettings, 1)
-        st.bank_enabled = True
-        s.commit()
 
     def _db():
         d = Session()
@@ -76,10 +72,14 @@ def test_order_is_idempotent_and_payment_status(client):
     b = c.post("/api/orders", json=body, headers=h)
     assert a.status_code == 201 and a.json()["order_number"] == b.json()["order_number"]
     assert a.json()["payment_status"] == "UNPAID"
-    bank = c.post("/api/orders", json={**body, "payment_method": "BANK_TRANSFER"}, headers={"Idempotency-Key": "key-87654321"})
-    assert bank.json()["payment_status"] == "PENDING_VERIFICATION"
-    easy = c.post("/api/orders", json={**body, "payment_method": "EASYPAISA"}, headers={"Idempotency-Key": "key-11111111"})
-    assert easy.status_code == 422  # disabled until configured
+    assert a.json()["payment_instructions"] is None  # nothing to pay online for COD
+    easy = c.post("/api/orders", json={**body, "payment_method": "EASYPAISA"}, headers={"Idempotency-Key": "key-87654321"})
+    assert easy.status_code == 201
+    j = easy.json()
+    assert j["payment_status"] == "AWAITING_PAYMENT"  # not "pending verification" until the customer sends proof
+    assert j["payment_instructions"]["account_number"] == "03143404938"
+    assert j["payment_instructions"]["amount"] == j["total"] == 400
+    assert c.post("/api/orders", json={**body, "payment_method": "BANK_TRANSFER"}, headers={"Idempotency-Key": "key-11111111"}).status_code == 422
 
 
 def test_minimum_order(client):
@@ -92,7 +92,7 @@ def test_minimum_order(client):
 def test_payment_reference_requires_matching_phone(client):
     c, S = client
     pid, vids, _ = ids(S, "demo-cold-drink")
-    body = {**ORDER, "payment_method": "BANK_TRANSFER", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    body = {**ORDER, "payment_method": "EASYPAISA", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-33333333"}).json()["order_number"]
     bad = c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TXN12345", "phone": "03009999999"})
     assert bad.status_code == 404
@@ -111,13 +111,13 @@ def test_admin_requires_auth_and_manages_orders(client):
     tok = c.post("/api/admin/login", json={"email": "a@x.com", "password": "pw-12345"}).json()["token"]
     h = {"Authorization": f"Bearer {tok}"}
     pid, vids, _ = ids(S, "demo-cold-drink")
-    body = {**ORDER, "payment_method": "BANK_TRANSFER", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 2}]}
+    body = {**ORDER, "payment_method": "EASYPAISA", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 2}]}
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-44444444"}).json()["order_number"]
     assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CONFIRMED"}, headers=h).json()["status"] == "CONFIRMED"
     assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PAID"}, headers=h).json()["payment_status"] == "PAID"
     st = c.get("/api/admin/stats", headers=h).json()
     assert st["total_orders"] == 1 and st["pending_payments"] == 0 and st["total_sales"] == 700
-    assert c.get("/api/admin/orders?method=BANK_TRANSFER", headers=h).json()[0]["order_number"] == n
+    assert c.get("/api/admin/orders?method=EASYPAISA", headers=h).json()[0]["order_number"] == n
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -136,7 +136,7 @@ def test_uploads_are_validated_and_receipts_private(client, tmp_path, monkeypatc
     assert c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", b"not an image")}, headers=h).status_code == 422
     ok = c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", PNG)}, headers=h)
     assert ok.status_code == 200 and ok.json()["image_url"].startswith("/media/products/")
-    body = {**ORDER, "payment_method": "BANK_TRANSFER", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    body = {**ORDER, "payment_method": "EASYPAISA", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-55555555"}).json()["order_number"]
     assert c.post(f"/api/orders/{n}/receipt", data={"phone": "03000000000"}, files={"file": ("r.png", PNG)}).status_code == 404
     assert c.post(f"/api/orders/{n}/receipt", data={"phone": ORDER["customer_phone"]}, files={"file": ("r.png", PNG)}).status_code == 200
@@ -199,3 +199,91 @@ def test_admin_edits_sizes_and_toppings(client):
     assert new["variants"][0]["id"] == vids[0]  # id kept, so saved carts stay valid
     assert [a["name"] for a in new["addons"]] == ["Nutella"]
     assert c.put(f"/api/admin/products/{pid}/options", json=body).status_code == 401
+
+
+def _easy_order(c, S, key, phone="03001234567", qty=1):
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "customer_phone": phone, "payment_method": "EASYPAISA",
+            "items": [{"product_id": pid, "variant_id": vids[1], "quantity": qty}]}
+    return c.post("/api/orders", json=body, headers={"Idempotency-Key": key}).json()
+
+
+def test_payment_methods_endpoint_lists_cod_and_easypaisa(client):
+    c, _ = client
+    m = {x["method"]: x for x in c.get("/api/payment-methods").json()}
+    assert set(m) == {"COD", "EASYPAISA"} and m["COD"]["enabled"] and m["EASYPAISA"]["enabled"]
+    assert m["EASYPAISA"]["account_number"] == "03143404938"
+    assert c.get("/api/settings").json()["easypaisa_number"] == "03143404938"
+
+
+def test_easypaisa_full_flow_and_phone_formats(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    o = _easy_order(c, S, "key-aaaaaaaa")
+    n = o["order_number"]
+    assert c.get(f"/api/orders/{n}").json()["payment_instructions"]["account_number"] == "03143404938"
+    # same number written differently is accepted, a different number is not
+    ok = c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "tid-123456789", "phone": "+92 300 1234567"})
+    assert ok.status_code == 200 and ok.json()["payment_status"] == "PENDING_VERIFICATION"
+    assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TID123456789", "phone": "03009999999"}).status_code == 404
+    # cannot start preparing before the money is verified
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "PREPARING"}, headers=h).status_code == 409
+    assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PAID", "note": "seen in app"}, headers=h).json()["payment_status"] == "PAID"
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "PREPARING"}, headers=h).status_code == 200
+    after = c.get(f"/api/orders/{n}").json()
+    assert after["payment_status"] == "PAID" and after["payment_instructions"] is None
+    assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "NEWTID123456", "phone": "03001234567"}).status_code == 422
+
+
+def test_same_transaction_id_cannot_pay_two_orders(client):
+    c, S = client
+    a = _easy_order(c, S, "key-bbbbbbbb")["order_number"]
+    b = _easy_order(c, S, "key-cccccccc")["order_number"]
+    ref = {"transaction_ref": "TXN998877665", "phone": "03001234567"}
+    assert c.post(f"/api/orders/{a}/payment-reference", json=ref).status_code == 200
+    assert c.post(f"/api/orders/{b}/payment-reference", json={**ref, "transaction_ref": "txn998877665"}).status_code == 409
+    assert c.post(f"/api/orders/{a}/payment-reference", json=ref).status_code == 200  # resubmitting on the same order is fine
+    assert c.post(f"/api/orders/{b}/payment-reference", json={**ref, "transaction_ref": "ab"}).status_code == 422  # too short
+
+
+def test_cod_delivery_marks_paid_and_cod_needs_no_proof(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-dddddddd"}).json()["order_number"]
+    assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TXN12345678", "phone": ORDER["customer_phone"]}).status_code == 422
+    assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PENDING_VERIFICATION"}, headers=h).status_code == 422
+    for st in ("CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"):
+        assert c.patch(f"/api/admin/orders/{n}/status", json={"status": st}, headers=h).status_code == 200
+    assert c.get(f"/api/orders/{n}").json()["payment_status"] == "PAID"
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CANCELLED"}, headers=h).status_code == 409
+
+
+def test_cancel_restores_coupon_and_blocks_payment(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "coupon_code": "DEMO10", "payment_method": "EASYPAISA",
+            "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-eeeeeeee"}).json()["order_number"]
+    with S() as s:
+        from sqlalchemy import select
+        assert s.scalar(select(models.Coupon.used_count).where(models.Coupon.code == "DEMO10")) == 1
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CANCELLED"}, headers=h).status_code == 200
+    with S() as s:
+        assert s.scalar(select(models.Coupon.used_count).where(models.Coupon.code == "DEMO10")) == 0
+    assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TXN12345678", "phone": ORDER["customer_phone"]}).status_code == 422
+    assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PAID"}, headers=h).status_code == 409
+
+
+def test_admin_settings_guard_payment_methods(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    assert c.put("/api/admin/settings", json={"easypaisa_number": "12345"}, headers=h).status_code == 422
+    assert c.put("/api/admin/settings", json={"easypaisa_number": "0314 3404938"}, headers=h).json()["easypaisa_number"] == "03143404938"
+    assert c.put("/api/admin/settings", json={"cod_enabled": False, "easypaisa_enabled": False}, headers=h).status_code == 422
+    assert c.put("/api/admin/settings", json={"cod_enabled": False}, headers=h).status_code == 200
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    assert c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-ffffffff"}).status_code == 422  # COD switched off

@@ -60,11 +60,6 @@ class PublicSettings(Out):
     easypaisa_enabled: bool
     easypaisa_name: str | None
     easypaisa_number: str | None
-    bank_enabled: bool
-    bank_name: str | None
-    bank_account_title: str | None
-    bank_account_number: str | None
-    bank_iban: str | None
 
 
 class CartLineIn(BaseModel):
@@ -112,7 +107,16 @@ class OrderIn(QuoteIn):
     address: str = Field(min_length=5, max_length=300)
     landmark: str | None = Field(default=None, max_length=160)
     instructions: str | None = Field(default=None, max_length=300)
-    payment_method: Literal["COD", "EASYPAISA", "BANK_TRANSFER"]
+    payment_method: Literal["COD", "EASYPAISA"]
+
+
+class PaymentInstructions(BaseModel):
+    method: str
+    account_number: str
+    account_name: str | None
+    amount: int
+    reference: str  # the order number: customer should mention it in the Easypaisa payment note
+    message: str
 
 
 class OrderOut(Out):
@@ -125,6 +129,7 @@ class OrderOut(Out):
     total: int
     payment_method: str
     payment_status: str
+    payment_instructions: PaymentInstructions | None = None  # only while an Easypaisa payment is still due
 
 
 class ZoneOut(Out):

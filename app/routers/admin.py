@@ -7,20 +7,22 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import models
 from ..db import get_db
 from ..config import settings as cfg
+from ..payments import PK_MOBILE
 from ..pricing import get_settings
 from ..uploads import save_upload
 from ..security import get_admin, make_token, verify_password
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 STATUSES = {"PENDING_CONFIRMATION", "CONFIRMED", "PREPARING", "READY_FOR_DISPATCH", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"}
-PAY_STATUSES = {"UNPAID", "PENDING_VERIFICATION", "PAID", "FAILED", "REFUNDED"}
+PAY_STATUSES = {"UNPAID", "AWAITING_PAYMENT", "PENDING_VERIFICATION", "PAID", "FAILED", "REFUNDED"}
+NEEDS_PAYMENT_FIRST = {"PREPARING", "READY_FOR_DISPATCH", "OUT_FOR_DELIVERY", "DELIVERED"}  # for Easypaisa orders
 _attempts: dict[str, list[float]] = defaultdict(list)
 
 
@@ -51,7 +53,7 @@ def _detail(o: models.Order) -> dict:
         "coupon_code": o.coupon_code,
         "items": [{"name": i.product_name, "variant": i.variant_name, "addons": i.addons, "quantity": i.quantity, "line_total": i.line_total} for i in o.items],
         "payment_method": o.payment.method, "payment_status": o.payment.status,
-        "transaction_ref": o.payment.transaction_ref, "admin_note": o.payment.admin_note, "has_receipt": bool(o.payment.receipt_path),
+        "payment_amount": o.payment.amount, "transaction_ref": o.payment.transaction_ref, "admin_note": o.payment.admin_note, "has_receipt": bool(o.payment.receipt_path),
     }
 
 
@@ -72,7 +74,8 @@ def stats(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db
         "total_orders": count(), "today_orders": count(O.created_at >= start),
         "total_sales": db.scalar(select(func.coalesce(func.sum(O.total), 0)).where(O.status != "CANCELLED")),
         "pending_orders": count(O.status == "PENDING_CONFIRMATION"), "completed_orders": count(O.status == "DELIVERED"),
-        "pending_payments": db.scalar(select(func.count(models.Payment.id)).where(models.Payment.status == "PENDING_VERIFICATION")) or 0,
+        "pending_payments": db.scalar(select(func.count(models.Payment.id)).join(O, O.id == models.Payment.order_id).where(models.Payment.status == "PENDING_VERIFICATION", O.status != "CANCELLED")) or 0,
+        "awaiting_payments": db.scalar(select(func.count(models.Payment.id)).join(O, O.id == models.Payment.order_id).where(models.Payment.status == "AWAITING_PAYMENT", O.status != "CANCELLED")) or 0,
         "bestsellers": [{"name": n, "quantity": int(q)} for n, q in top],
         "daily_sales": [{"date": (start - timedelta(days=d)).date().isoformat(),
                          "total": daily.get((start - timedelta(days=d)).date().isoformat(), 0)} for d in range(6, -1, -1)],
@@ -106,7 +109,22 @@ class StatusIn(BaseModel):
 def set_status(n: str, data: StatusIn, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     if data.status not in STATUSES:
         raise HTTPException(422, "Invalid status")
-    o = _order(db, n); o.status = data.status; db.commit()
+    o = _order(db, n)
+    if data.status == o.status:
+        return _detail(o)
+    if o.status in ("DELIVERED", "CANCELLED"):
+        raise HTTPException(409, f"A {o.status.lower()} order cannot be changed")
+    p = o.payment
+    if p.method == "EASYPAISA" and data.status in NEEDS_PAYMENT_FIRST and p.status != "PAID":
+        raise HTTPException(409, "Verify the Easypaisa payment (mark it PAID) before preparing or delivering this order")
+    if data.status == "CANCELLED" and o.coupon_code:  # give the coupon use back
+        c = db.scalar(select(models.Coupon).where(models.Coupon.code == o.coupon_code))
+        if c and c.used_count > 0:
+            c.used_count -= 1
+    if data.status == "DELIVERED" and p.method == "COD" and p.status == "UNPAID":
+        p.status = "PAID"  # cash was collected at the door
+    o.status = data.status
+    db.commit()
     return _detail(o)
 
 
@@ -119,7 +137,18 @@ class PaymentIn(BaseModel):
 def set_payment(n: str, data: PaymentIn, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     if data.status not in PAY_STATUSES:
         raise HTTPException(422, "Invalid payment status")
-    o = _order(db, n); o.payment.status = data.status; o.payment.admin_note = data.note; db.commit()
+    o = _order(db, n)
+    p = o.payment
+    if p.method == "COD" and data.status in ("AWAITING_PAYMENT", "PENDING_VERIFICATION"):
+        raise HTTPException(422, "Not valid for a Cash on Delivery order")
+    if data.status == "PAID" and o.status == "CANCELLED":
+        raise HTTPException(409, "This order is cancelled")
+    if data.status == "REFUNDED" and p.status != "PAID":
+        raise HTTPException(422, "Only a paid order can be refunded")
+    p.status = data.status
+    if data.note is not None:
+        p.admin_note = data.note
+    db.commit()
     return _detail(o)
 
 
@@ -134,11 +163,16 @@ class SettingsIn(BaseModel):
     easypaisa_enabled: bool | None = None
     easypaisa_name: str | None = None
     easypaisa_number: str | None = None
-    bank_enabled: bool | None = None
-    bank_name: str | None = None
-    bank_account_title: str | None = None
-    bank_account_number: str | None = None
-    bank_iban: str | None = None
+
+    @field_validator("easypaisa_number")
+    @classmethod
+    def _valid_number(cls, v: str | None) -> str | None:
+        if v is None or not v.strip():
+            return None
+        v = v.replace(" ", "").replace("-", "")
+        if not PK_MOBILE.match(v):
+            raise ValueError("Enter a valid Easypaisa mobile number, e.g. 03143404938")
+        return v
 
 
 def _settings_dict(s: models.BusinessSettings) -> dict:
@@ -154,8 +188,14 @@ def get_admin_settings(_: models.AdminUser = Depends(get_admin), db: Session = D
 @router.put("/settings")
 def put_admin_settings(data: SettingsIn, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     s = get_settings(db)
-    for k, v in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if changes.get("easypaisa_number", "x") is None:
+        raise HTTPException(422, "Easypaisa number cannot be empty")
+    for k, v in changes.items():
         setattr(s, k, v)
+    if not s.cod_enabled and not s.easypaisa_enabled:
+        db.rollback()
+        raise HTTPException(422, "At least one payment method must stay enabled")
     db.commit()
     return _settings_dict(s)
 

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     smtp_pass: str | None = None
     email_from: str | None = None
     admin_notify_email: str | None = None
+    # Easypaisa account customers pay to (override on Railway with EASYPAISA_NUMBER if it ever changes)
+    easypaisa_number: str = "03143404938"
+    easypaisa_account_name: str | None = None
 
 
 settings = Settings()
