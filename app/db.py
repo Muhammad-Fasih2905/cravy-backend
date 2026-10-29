@@ -1,14 +1,64 @@
+import logging
+import os
+
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
 
-# Railway gives postgres:// or postgresql:// -> make SQLAlchemy use the psycopg (v3) driver
-_url = settings.database_url
-if _url.startswith("postgres://"):
-    _url = "postgresql+psycopg://" + _url[len("postgres://"):]
-elif _url.startswith("postgresql://"):
-    _url = "postgresql+psycopg://" + _url[len("postgresql://"):]
+log = logging.getLogger("cravy.db")
+
+
+def _normalize(url: str) -> str:
+    url = url.strip().strip("\"'").strip()
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+def _usable(url: str) -> bool:
+    """A URL is usable only if it is non-empty, has no unresolved ${{...}} placeholder and parses with a real host/port."""
+    if not url or "${{" in url or "{{" in url:
+        return False
+    try:
+        u = make_url(url)
+    except Exception:
+        return False
+    if u.get_backend_name() == "sqlite":
+        return True
+    return bool(u.host) and bool(u.database)
+
+
+def _resolve_url() -> str:
+    # 1) DATABASE_URL as configured, 2) other URL variables Railway provides, 3) separate PG* variables
+    candidates = [settings.database_url, os.getenv("DATABASE_PRIVATE_URL", ""), os.getenv("DATABASE_PUBLIC_URL", "")]
+    for c in candidates:
+        c = _normalize(c or "")
+        if _usable(c):
+            return c
+    host, db = os.getenv("PGHOST"), os.getenv("PGDATABASE")
+    if host and db:
+        built = URL.create(
+            "postgresql+psycopg",
+            username=os.getenv("PGUSER"),
+            password=os.getenv("PGPASSWORD"),
+            host=host,
+            port=int(os.getenv("PGPORT") or 5432),
+            database=db,
+        ).render_as_string(hide_password=False)
+        return built
+    log.error(
+        "DATABASE_URL is empty or invalid (value was not resolved). Falling back to a local SQLite file; "
+        "data will be LOST on redeploy. In Railway set DATABASE_URL to ${{Postgres.DATABASE_URL}} "
+        "(use your Postgres service's exact name)."
+    )
+    return "sqlite:///./cravy.db"
+
+
+_url = _resolve_url()
 
 _args = {"check_same_thread": False} if _url.startswith("sqlite") else {}
 engine = create_engine(_url, connect_args=_args, pool_pre_ping=True)
