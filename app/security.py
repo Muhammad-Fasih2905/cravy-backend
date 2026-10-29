@@ -1,7 +1,7 @@
 """Password hashing (scrypt) and signed expiring admin tokens, standard library only."""
 import hashlib, hmac, os, time
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from . import models
@@ -31,10 +31,9 @@ def make_token(uid: int, ttl: int = 8 * 3600) -> str:
     return f"{p}.{_sig(p)}"
 
 
-def get_admin(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> models.AdminUser:
-    """Every admin route depends on this: authorization is enforced on the server, not the UI."""
+def _admin_from_token(raw: str, db: Session) -> models.AdminUser:
     try:
-        uid, exp, sig = (authorization or "").removeprefix("Bearer ").split(".")
+        uid, exp, sig = raw.removeprefix("Bearer ").strip().split(".")
         if not hmac.compare_digest(sig, _sig(f"{uid}.{exp}")) or int(exp) < time.time():
             raise ValueError
         admin = db.get(models.AdminUser, int(uid))
@@ -43,3 +42,15 @@ def get_admin(authorization: str | None = Header(default=None), db: Session = De
     if admin is None or not admin.is_active:
         raise HTTPException(401, "Not authenticated")
     return admin
+
+
+def get_admin(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> models.AdminUser:
+    """Every admin route depends on this: authorization is enforced on the server, not the UI."""
+    return _admin_from_token(authorization or "", db)
+
+
+def get_admin_flex(authorization: str | None = Header(default=None), token: str | None = Query(default=None),
+                   db: Session = Depends(get_db)) -> models.AdminUser:
+    """Same check, but the token may also come as ?token=... for things a browser opens without custom headers
+    (the live EventSource stream, the printable slip, receipt images)."""
+    return _admin_from_token(authorization or token or "", db)

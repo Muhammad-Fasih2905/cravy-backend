@@ -8,8 +8,19 @@ from app import db as appdb, models, seed
 from app.main import app
 
 
+SHOP = (24.8607, 67.0011)
+
+
+def at_km(km):
+    """A customer location `km` kilometres due north of the shop."""
+    return {"latitude": SHOP[0] + km / 111.195, "longitude": SHOP[1]}
+
+
 @pytest.fixture()
 def client(monkeypatch):
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "shop_latitude", SHOP[0])
+    monkeypatch.setattr(cfg, "shop_longitude", SHOP[1])
     eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Session = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False)
     monkeypatch.setattr(seed, "engine", eng)
@@ -36,7 +47,7 @@ def ids(Session, slug):
 
 
 ORDER = dict(customer_name="Ali Khan", customer_phone="03001234567", city="Karachi",
-             address="House 1, Street 2", payment_method="COD")
+             address="House 1, Street 2", payment_method="COD", **at_km(2.5))  # 2-3 km band = Rs. 99
 
 
 def test_menu_preload(client):
@@ -48,18 +59,21 @@ def test_menu_preload(client):
 def test_quote_uses_server_prices(client):
     c, S = client
     pid, vids, aids = ids(S, "demo-vanilla-scoop")
-    r = c.post("/api/cart/quote", json={"items": [{"product_id": pid, "variant_id": vids[1], "addon_ids": aids, "quantity": 2}]})
+    item = {"product_id": pid, "variant_id": vids[1], "addon_ids": aids, "quantity": 2}
+    r = c.post("/api/cart/quote", json={"items": [item], **at_km(2.5)})
     assert r.status_code == 200
-    # (350 + 40 + 30) * 2 = 840 ; + delivery 100
-    assert r.json()["subtotal"] == 840 and r.json()["total"] == 940
+    # (350 + 40 + 30) * 2 = 840 ; + delivery Rs. 99 (2-3 km)
+    assert r.json()["subtotal"] == 840 and r.json()["total"] == 939 and r.json()["delivery_band"] == "2-3 km"
+    nolocation = c.post("/api/cart/quote", json={"items": [item]}).json()
+    assert nolocation["delivery_pending"] is True and nolocation["total"] == 840
 
 
 def test_coupon_and_invalid_variant(client):
     c, S = client
     pid, vids, _ = ids(S, "demo-cold-drink")
     item = {"product_id": pid, "variant_id": vids[2], "quantity": 1}
-    ok = c.post("/api/cart/quote", json={"items": [item], "coupon_code": "demo10"}).json()
-    assert ok["discount_total"] == 38 and ok["total"] == 380 - 38 + 100
+    ok = c.post("/api/cart/quote", json={"items": [item], "coupon_code": "demo10", **at_km(2.5)}).json()
+    assert ok["discount_total"] == 38 and ok["total"] == 380 - 38 + 99
     assert c.post("/api/cart/quote", json={"items": [{"product_id": pid, "quantity": 1}]}).status_code == 422
 
 
@@ -73,12 +87,13 @@ def test_order_is_idempotent_and_payment_status(client):
     assert a.status_code == 201 and a.json()["order_number"] == b.json()["order_number"]
     assert a.json()["payment_status"] == "UNPAID"
     assert a.json()["payment_instructions"] is None  # nothing to pay online for COD
+    assert a.json()["status"] == "PENDING"
     easy = c.post("/api/orders", json={**body, "payment_method": "EASYPAISA"}, headers={"Idempotency-Key": "key-87654321"})
     assert easy.status_code == 201
     j = easy.json()
     assert j["payment_status"] == "AWAITING_PAYMENT"  # not "pending verification" until the customer sends proof
     assert j["payment_instructions"]["account_number"] == "03143404938"
-    assert j["payment_instructions"]["amount"] == j["total"] == 400
+    assert j["payment_instructions"]["amount"] == j["total"] == 399  # 300 + Rs. 99 delivery
     assert c.post("/api/orders", json={**body, "payment_method": "BANK_TRANSFER"}, headers={"Idempotency-Key": "key-11111111"}).status_code == 422
 
 
@@ -113,10 +128,10 @@ def test_admin_requires_auth_and_manages_orders(client):
     pid, vids, _ = ids(S, "demo-cold-drink")
     body = {**ORDER, "payment_method": "EASYPAISA", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 2}]}
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-44444444"}).json()["order_number"]
-    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CONFIRMED"}, headers=h).json()["status"] == "CONFIRMED"
     assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PAID"}, headers=h).json()["payment_status"] == "PAID"
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "COMPLETED"}, headers=h).json()["status"] == "COMPLETED"
     st = c.get("/api/admin/stats", headers=h).json()
-    assert st["total_orders"] == 1 and st["pending_payments"] == 0 and st["total_sales"] == 700
+    assert st["total_orders"] == 1 and st["pending_payments"] == 0 and st["total_sales"] == 699  # 600 + Rs. 99 delivery
     assert c.get("/api/admin/orders?method=EASYPAISA", headers=h).json()[0]["order_number"] == n
 
 
@@ -163,25 +178,53 @@ def _admin_headers(c, S):
     return {"Authorization": "Bearer " + c.post("/api/admin/login", json={"email": "a@x.com", "password": "pw-12345"}).json()["token"]}
 
 
-def test_delivery_zones_and_tax(client):
+def test_fixed_delivery_rates_by_distance(client):
+    c, S = client
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    line = {"product_id": pid, "variant_id": vids[1], "quantity": 1}  # Rs. 300
+    expected = {0.5: 0, 1.5: 79, 2.5: 99, 3.5: 149, 4.5: 199, 5.5: 219, 6.5: 239, 7.5: 249, 8.5: 269, 9.5: 299}
+    for km, charge in expected.items():
+        q = c.post("/api/cart/quote", json={"items": [line], **at_km(km)}).json()
+        assert q["delivery_charge"] == charge and q["total"] == 300 + charge and q["deliverable"] is True, km
+    assert c.post("/api/cart/quote", json={"items": [line], **at_km(0.5)}).json()["delivery_band"] == "Up to 1 km"
+    far = c.post("/api/cart/quote", json={"items": [line], **at_km(10.5)}).json()
+    assert far["deliverable"] is False and "10 km" in far["delivery_message"]
+    rates = c.get("/api/delivery-rates").json()
+    assert [r["charge"] for r in rates["rates"]] == [0, 79, 99, 149, 199, 219, 239, 249, 269, 299] and rates["max_km"] == 10
+    # an order needs a location, and is refused beyond 10 km, wherever it comes from
+    key = lambda k: {"Idempotency-Key": k}  # noqa: E731
+    base = {**ORDER, "items": [line]}
+    no_loc = {k: v for k, v in base.items() if k not in ("latitude", "longitude")}
+    assert c.post("/api/orders", json=no_loc, headers=key("key-iiiiiiii")).status_code == 422
+    assert c.post("/api/orders", json={**base, **at_km(10.5)}, headers=key("key-jjjjjjjj")).status_code == 422
+    ok = c.post("/api/orders", json={**base, **at_km(6.5)}, headers=key("key-kkkkkkkk"))
+    assert ok.status_code == 201 and ok.json()["delivery_charge"] == 239 and ok.json()["total"] == 539
+
+
+def test_fixed_boundaries_and_tax(client):
+    from app.delivery import charge_for
+    assert [charge_for(k) for k in (0, 1.0, 1.01, 2.0, 2.01, 10.0, 10.01)] == [0, 0, 79, 79, 99, 299, None]
     c, S = client
     h = _admin_headers(c, S)
     assert c.put("/api/admin/settings", json={"tax_percent": 5}, headers=h).json()["tax_percent"] == 5
-    zid = c.post("/api/admin/zones", json={"name": "Clifton", "city": "Karachi", "charge": 150, "free_above": 1000}, headers=h).json()["id"]
     pid, vids, _ = ids(S, "demo-cold-drink")
-    line = {"product_id": pid, "variant_id": vids[1], "quantity": 1}  # Rs. 300
-    pending = c.post("/api/cart/quote", json={"items": [line]}).json()
-    assert pending["delivery_pending"] is True and pending["tax_total"] == 15
-    q = c.post("/api/cart/quote", json={"items": [line], "zone_id": zid}).json()
-    assert q["delivery_charge"] == 150 and q["tax_total"] == 15 and q["total"] == 465
-    free = c.post("/api/cart/quote", json={"items": [{**line, "quantity": 4}], "zone_id": zid}).json()
-    assert free["delivery_charge"] == 0 and free["total"] == 1200 + 60  # 5% tax on 1200
-    assert c.post("/api/orders", json={**ORDER, "items": [line]}, headers={"Idempotency-Key": "key-66666666"}).status_code == 422
-    ok = c.post("/api/orders", json={**ORDER, "items": [line], "zone_id": zid}, headers={"Idempotency-Key": "key-77777777"})
-    assert ok.status_code == 201 and ok.json()["tax_total"] == 15 and ok.json()["total"] == 465
-    assert len(c.get("/api/zones").json()) == 1
-    c.patch(f"/api/admin/zones/{zid}", json={"is_active": False}, headers=h)
-    assert c.get("/api/zones").json() == []
+    q = c.post("/api/cart/quote", json={"items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}], **at_km(1.5)}).json()
+    assert q["tax_total"] == 15 and q["delivery_charge"] == 79 and q["total"] == 300 + 15 + 79
+
+
+def test_shop_location_is_admin_editable_and_required(client, monkeypatch):
+    from app.config import settings as cfg
+    c, S = client
+    h = _admin_headers(c, S)
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    item = {"items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    monkeypatch.setattr(cfg, "shop_latitude", None)
+    monkeypatch.setattr(cfg, "shop_longitude", None)
+    assert c.post("/api/cart/quote", json={**item, **at_km(2.5)}).status_code == 503  # nowhere to measure from
+    assert c.put("/api/admin/settings", json={"shop_latitude": 24.86}, headers=h).status_code == 422  # needs both
+    ok = c.put("/api/admin/settings", json={"shop_latitude": SHOP[0], "shop_longitude": SHOP[1]}, headers=h)
+    assert ok.status_code == 200 and ok.json()["shop_latitude"] == SHOP[0]
+    assert c.post("/api/cart/quote", json={**item, **at_km(2.5)}).json()["delivery_charge"] == 99
 
 
 def test_admin_edits_sizes_and_toppings(client):
@@ -226,10 +269,10 @@ def test_easypaisa_full_flow_and_phone_formats(client):
     ok = c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "tid-123456789", "phone": "+92 300 1234567"})
     assert ok.status_code == 200 and ok.json()["payment_status"] == "PENDING_VERIFICATION"
     assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TID123456789", "phone": "03009999999"}).status_code == 404
-    # cannot start preparing before the money is verified
-    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "PREPARING"}, headers=h).status_code == 409
+    # cannot complete before the money is verified
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "COMPLETED"}, headers=h).status_code == 409
     assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PAID", "note": "seen in app"}, headers=h).json()["payment_status"] == "PAID"
-    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "PREPARING"}, headers=h).status_code == 200
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "COMPLETED"}, headers=h).status_code == 200
     after = c.get(f"/api/orders/{n}").json()
     assert after["payment_status"] == "PAID" and after["payment_instructions"] is None
     assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "NEWTID123456", "phone": "03001234567"}).status_code == 422
@@ -246,7 +289,7 @@ def test_same_transaction_id_cannot_pay_two_orders(client):
     assert c.post(f"/api/orders/{b}/payment-reference", json={**ref, "transaction_ref": "ab"}).status_code == 422  # too short
 
 
-def test_cod_delivery_marks_paid_and_cod_needs_no_proof(client):
+def test_cod_proof_is_refused_and_completion_marks_cash_paid(client):
     c, S = client
     h = _admin_headers(c, S)
     pid, vids, _ = ids(S, "demo-cold-drink")
@@ -254,10 +297,75 @@ def test_cod_delivery_marks_paid_and_cod_needs_no_proof(client):
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-dddddddd"}).json()["order_number"]
     assert c.post(f"/api/orders/{n}/payment-reference", json={"transaction_ref": "TXN12345678", "phone": ORDER["customer_phone"]}).status_code == 422
     assert c.patch(f"/api/admin/orders/{n}/payment", json={"status": "PENDING_VERIFICATION"}, headers=h).status_code == 422
-    for st in ("CONFIRMED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED"):
-        assert c.patch(f"/api/admin/orders/{n}/status", json={"status": st}, headers=h).status_code == 200
+    done = c.patch(f"/api/admin/orders/{n}/status", json={"status": "COMPLETED"}, headers=h)
+    assert done.status_code == 200 and done.json()["status"] == "COMPLETED" and done.json()["payment_status"] == "PAID"
+    assert done.json()["completed_at"]
     assert c.get(f"/api/orders/{n}").json()["payment_status"] == "PAID"
-    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CANCELLED"}, headers=h).status_code == 409
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "CANCELLED"}, headers=h).status_code == 409  # final
+    assert c.patch(f"/api/admin/orders/{n}/status", json={"status": "PREPARING"}, headers=h).status_code == 422  # old steps are gone
+
+
+def test_cod_order_lifecycle_is_saved_live_and_survives_refresh(client, monkeypatch):
+    """New order -> shows in admin as PENDING -> admin completes -> a fresh read says COMPLETED (same as the live event)."""
+    from app.routers import admin as admin_router, orders as orders_router
+    events = []
+    monkeypatch.setattr(orders_router, "publish_order", lambda ev, o: events.append((ev, o.order_number, o.status)))
+    monkeypatch.setattr(admin_router, "publish_order", lambda ev, o: events.append((ev, o.order_number, o.status)))
+    c, S = client
+    h = _admin_headers(c, S)
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 2}]}
+    n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-gggggggg"}).json()["order_number"]
+    assert events == [("order.created", n, "PENDING")]
+    lst = c.get("/api/admin/orders", headers=h)
+    assert lst.headers["cache-control"] == "no-store"  # a refresh can never show a cached list
+    row = lst.json()[0]
+    assert row["order_number"] == n and row["status"] == "PENDING" and row["payment_status"] == "UNPAID"
+    assert row["delivery_zone"] == "2-3 km" and row["delivery_charge"] == 99 and row["total"] == 699
+    assert row["map_url"].startswith("https://www.google.com/maps?q=") and row["items"][0]["quantity"] == 2
+    assert c.get("/api/admin/orders?status=COMPLETED", headers=h).json() == []
+    patched = c.patch(f"/api/admin/orders/{n}/status", json={"status": "COMPLETED"}, headers=h).json()
+    assert events[-1] == ("order.updated", n, "COMPLETED")
+    for _ in range(2):  # "refresh" twice: the server says exactly what the PATCH said
+        assert c.get("/api/admin/orders?status=COMPLETED", headers=h).json()[0] == patched
+        assert c.get("/api/admin/orders?status=PENDING", headers=h).json() == []
+    assert c.get(f"/api/admin/orders/{n}", headers=h).json()["status"] == "COMPLETED"
+    st = c.get("/api/admin/stats", headers=h).json()
+    assert st["pending_orders"] == 0 and st["completed_orders"] == 1 and st["total_sales"] == 699 and st["pending_amount"] == 0
+    assert c.get("/api/admin/orders?updated_since=2999-01-01T00:00:00", headers=h).json() == []
+    assert len(c.get("/api/admin/orders?updated_since=2000-01-01T00:00:00", headers=h).json()) == 1
+
+
+def test_order_slip_is_printable_escaped_and_protected(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    tok = h["Authorization"].removeprefix("Bearer ")
+    pid, vids, _ = ids(S, "demo-cold-drink")
+    body = {**ORDER, "customer_name": "<script>alert(1)</script>", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
+    n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-hhhhhhhh"}).json()["order_number"]
+    assert c.get(f"/api/admin/orders/{n}/slip").status_code == 401
+    r = c.get(f"/api/admin/orders/{n}/slip?token={tok}&autoprint=1")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert n in r.text and "COLLECT Rs. 399 IN CASH" in r.text and "2-3 km" in r.text and "window.print()" in r.text
+    assert "<script>alert(1)" not in r.text and "&lt;script&gt;" in r.text
+    assert "window.print()" not in c.get(f"/api/admin/orders/{n}/slip", headers=h).text
+
+
+def test_live_stream_requires_admin_and_broker_delivers_across_threads(client):
+    import asyncio, threading
+    from app.realtime import Broker
+    c, _ = client
+    assert c.get("/api/admin/orders/stream").status_code == 401
+    assert c.get("/api/admin/orders/stream?token=bad.token.value").status_code == 401
+
+    async def run():
+        b = Broker()
+        q = b.subscribe()
+        threading.Thread(target=b.publish, args=("order.created", {"x": 1})).start()
+        got = await asyncio.wait_for(q.get(), 2)
+        b.unsubscribe(q)
+        return got, len(b._subs)
+    assert asyncio.run(run()) == (("order.created", {"x": 1}), 0)
 
 
 def test_cancel_restores_coupon_and_blocks_payment(client):

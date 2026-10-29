@@ -7,13 +7,36 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .config import settings
-from .db import Base, SessionLocal, engine
+from .db import Base, SessionLocal, engine, ensure_schema
 from .payments import ensure_payment_defaults
 from .routers import admin, catalog, orders
 
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Cravy API", version="0.2.0")
+
+
+class NoStore:
+    """Orders and admin data must never be served from a browser/proxy cache, or a refresh could show stale state."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope["path"].startswith(("/api/admin", "/api/orders")):
+            return await self.app(scope, receive, send)
+
+        async def wrapped(message):
+            if message["type"] == "http.response.start" and not any(k.lower() == b"cache-control" and b"no-cache" in v for k, v in message.get("headers", [])):
+                headers = [(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"]
+                headers.append((b"cache-control", b"no-store"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, wrapped)
+
+
+app = FastAPI(title="Cravy API", version="0.3.0")
+app.add_middleware(NoStore)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +55,7 @@ app.include_router(admin.router)
 def _create_tables_for_dev():
     # Dev convenience. In production use Alembic: `alembic upgrade head`.
     Base.metadata.create_all(engine)
+    ensure_schema()
     with SessionLocal() as db:  # make sure COD + Easypaisa are configured even on a fresh database
         ensure_payment_defaults(db)
 

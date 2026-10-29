@@ -28,7 +28,7 @@ def run() -> None:
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         if db.get(models.BusinessSettings, 1) is None:
-            db.add(models.BusinessSettings(id=1, announcement="Demo announcement: edit in settings.", delivery_charge=100, min_order_value=300))
+            db.add(models.BusinessSettings(id=1, announcement="Demo announcement: edit in settings.", min_order_value=300))
         for ci, (cname, cslug, prods) in enumerate(MENU):
             cat = db.scalar(select(models.Category).where(models.Category.slug == cslug)) or models.Category(slug=cslug, name=cname)
             cat.name, cat.sort_order = cname, ci

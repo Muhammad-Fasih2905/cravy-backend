@@ -1,7 +1,7 @@
 """All money is whole PKR (int). Order items are snapshots."""
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .config import settings as _cfg
@@ -96,6 +96,8 @@ class BusinessSettings(Base):
     bank_account_title: Mapped[str | None] = mapped_column(String(80))
     bank_account_number: Mapped[str | None] = mapped_column(String(40))
     bank_iban: Mapped[str | None] = mapped_column(String(40))
+    shop_latitude: Mapped[float | None] = mapped_column(Float)  # where delivery distance is measured from
+    shop_longitude: Mapped[float | None] = mapped_column(Float)
 
 
 class Order(Base):
@@ -103,7 +105,7 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     order_number: Mapped[str] = mapped_column(String(30), unique=True)
     idempotency_key: Mapped[str] = mapped_column(String(80), unique=True)
-    status: Mapped[str] = mapped_column(String(30), default="PENDING_CONFIRMATION", index=True)
+    status: Mapped[str] = mapped_column(String(30), default="PENDING", index=True)  # PENDING | COMPLETED | CANCELLED
     customer_name: Mapped[str] = mapped_column(String(120))
     customer_phone: Mapped[str] = mapped_column(String(30), index=True)
     customer_email: Mapped[str | None] = mapped_column(String(160))
@@ -115,10 +117,15 @@ class Order(Base):
     delivery_charge: Mapped[int] = mapped_column(Integer, default=0)
     discount_total: Mapped[int] = mapped_column(Integer, default=0)
     tax_total: Mapped[int] = mapped_column(Integer, default=0)
-    delivery_zone: Mapped[str | None] = mapped_column(String(80))  # snapshot of the zone name
+    delivery_zone: Mapped[str | None] = mapped_column(String(80))  # snapshot of the distance band, e.g. "2-3 km"
+    delivery_distance_km: Mapped[float | None] = mapped_column(Float)
+    latitude: Mapped[float | None] = mapped_column(Float)  # customer's map pin
+    longitude: Mapped[float | None] = mapped_column(Float)
     total: Mapped[int] = mapped_column(Integer)
     coupon_code: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
     payment: Mapped["Payment"] = relationship(back_populates="order", uselist=False, cascade="all, delete-orphan")
 
@@ -173,14 +180,3 @@ class NotificationLog(Base):
     error: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class DeliveryZone(Base):
-    __tablename__ = "delivery_zones"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(80))
-    city: Mapped[str] = mapped_column(String(80))
-    charge: Mapped[int] = mapped_column(Integer, default=0)
-    free_above: Mapped[int | None] = mapped_column(Integer)  # subtotal at or above this ships free
-    min_order: Mapped[int | None] = mapped_column(Integer)  # overrides the global minimum
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -12,6 +12,7 @@ from ..db import get_db
 from ..notify import notify_new_order, notify_payment_submitted
 from ..payments import easypaisa_account, initial_status, instructions_for, method_enabled, require_payment_open, same_phone
 from ..pricing import build_quote, get_settings
+from ..realtime import publish_order
 from ..schemas import OrderIn, OrderOut, QuoteIn, QuoteOut
 from ..uploads import save_upload
 
@@ -63,7 +64,7 @@ def create_order(data: OrderIn, background: BackgroundTasks, idempotency_key: st
     if existing:  # retry of the same request: return the same order, never a duplicate
         return _out(existing, s)
 
-    q, coupon = build_quote(db, data, require_zone=True)
+    q, coupon = build_quote(db, data, require_location=True)
     if not q.meets_minimum:
         raise HTTPException(422, f"Minimum order is Rs. {q.min_order_value}")
     if not method_enabled(s, data.payment_method):
@@ -75,7 +76,9 @@ def create_order(data: OrderIn, background: BackgroundTasks, idempotency_key: st
         customer_name=data.customer_name.strip(), customer_phone=data.customer_phone.strip(), customer_email=data.customer_email,
         city=data.city.strip(), address=data.address.strip(), landmark=data.landmark, instructions=data.instructions,
         subtotal=q.subtotal, delivery_charge=q.delivery_charge, discount_total=q.discount_total,
-        tax_total=q.tax_total, delivery_zone=q.zone_name, total=q.total, coupon_code=q.coupon_code,
+        tax_total=q.tax_total, delivery_zone=q.delivery_band, delivery_distance_km=q.distance_km,
+        latitude=data.latitude, longitude=data.longitude, total=q.total, coupon_code=q.coupon_code,
+        updated_at=models.now(),
         items=[
             models.OrderItem(
                 product_id=l.product_id, product_name=l.product_name, variant_name=l.variant_name,
@@ -102,6 +105,7 @@ def create_order(data: OrderIn, background: BackgroundTasks, idempotency_key: st
         if dup:
             return _out(dup, s)
         raise HTTPException(409, "Could not create order, please retry")
+    publish_order("order.created", order)  # admin dashboards see it instantly
     background.add_task(notify_new_order, order.id)
     return _out(order, s)
 
@@ -133,11 +137,13 @@ def submit_payment_reference(order_number: str, data: PaymentRefIn, background: 
         raise HTTPException(409, "This Transaction ID was already used for another order. Check it and try again.")
     o.payment.transaction_ref = tid
     o.payment.status = "PENDING_VERIFICATION"
+    o.updated_at = models.now()
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "This Transaction ID was already used for another order. Check it and try again.")
+    publish_order("order.updated", o)
     background.add_task(notify_payment_submitted, o.id)
     return _out(o, get_settings(db))
 
@@ -149,6 +155,8 @@ async def upload_receipt(order_number: str, background: BackgroundTasks, phone: 
     require_payment_open(o)
     o.payment.receipt_path = await save_upload(file, "receipts", 5, allow_pdf=True)
     o.payment.status = "PENDING_VERIFICATION"
+    o.updated_at = models.now()
     db.commit()
+    publish_order("order.updated", o)
     background.add_task(notify_payment_submitted, o.id)
     return _out(o, get_settings(db))

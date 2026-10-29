@@ -53,7 +53,6 @@ class PublicSettings(Out):
     business_name: str
     phone: str | None
     announcement: str | None
-    delivery_charge: int
     min_order_value: int
     tax_percent: int
     cod_enabled: bool
@@ -72,7 +71,9 @@ class CartLineIn(BaseModel):
 class QuoteIn(BaseModel):
     items: list[CartLineIn] = Field(min_length=1, max_length=50)
     coupon_code: str | None = Field(default=None, max_length=40)
-    zone_id: int | None = None
+    # Customer's map pin. The server measures the distance to the shop and applies the fixed delivery rates.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
 class QuoteLine(BaseModel):
@@ -95,8 +96,11 @@ class QuoteOut(BaseModel):
     coupon_code: str | None
     meets_minimum: bool
     min_order_value: int
-    delivery_pending: bool = False  # true when a delivery area must still be chosen
-    zone_name: str | None = None
+    delivery_pending: bool = False  # true until the customer's location is known
+    distance_km: float | None = None
+    delivery_band: str | None = None  # e.g. "2-3 km"
+    deliverable: bool = True  # false when the location is beyond the delivery range
+    delivery_message: str | None = None
 
 
 class OrderIn(QuoteIn):
@@ -130,12 +134,3 @@ class OrderOut(Out):
     payment_method: str
     payment_status: str
     payment_instructions: PaymentInstructions | None = None  # only while an Easypaisa payment is still due
-
-
-class ZoneOut(Out):
-    id: int
-    name: str
-    city: str
-    charge: int
-    free_above: int | None
-    min_order: int | None

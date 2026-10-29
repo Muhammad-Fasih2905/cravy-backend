@@ -6,6 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from . import models
+from .config import settings as cfg
+from .delivery import MAX_KM, band_label, charge_for, haversine_km
 from .schemas import QuoteIn, QuoteLine, QuoteOut
 
 
@@ -41,7 +43,7 @@ def load_coupon(db: Session, code: str, subtotal: int) -> models.Coupon:
     return c
 
 
-def build_quote(db: Session, data: QuoteIn, require_zone: bool = False) -> tuple[QuoteOut, models.Coupon | None]:
+def build_quote(db: Session, data: QuoteIn, require_location: bool = False) -> tuple[QuoteOut, models.Coupon | None]:
     ids = {i.product_id for i in data.items}
     products = {
         p.id: p
@@ -80,21 +82,29 @@ def build_quote(db: Session, data: QuoteIn, require_zone: bool = False) -> tuple
     if data.coupon_code:
         coupon = load_coupon(db, data.coupon_code, subtotal)
         discount = calc_discount(coupon, subtotal)
-    zones = db.scalars(select(models.DeliveryZone).where(models.DeliveryZone.is_active)).all()
-    zone, delivery, pending, min_order = None, s.delivery_charge, False, s.min_order_value
-    if zones:  # delivery areas are configured, so the customer must pick one
-        zone = next((z for z in zones if z.id == data.zone_id), None)
-        if zone is None:
-            if require_zone:
-                raise HTTPException(422, "Please choose a delivery area")
-            delivery, pending = 0, True
+    min_order = s.min_order_value
+    delivery, pending, deliverable, message = 0, True, True, None
+    km = band = None
+    if data.latitude is not None and data.longitude is not None:
+        shop_lat = s.shop_latitude if s.shop_latitude is not None else cfg.shop_latitude
+        shop_lng = s.shop_longitude if s.shop_longitude is not None else cfg.shop_longitude
+        if shop_lat is None or shop_lng is None:
+            raise HTTPException(503, "Delivery is not configured yet: the shop location is missing")
+        km = round(haversine_km(shop_lat, shop_lng, data.latitude, data.longitude), 2)
+        charge = charge_for(km)
+        if charge is None:
+            deliverable, message = False, f"Sorry, we only deliver within {MAX_KM} km of the shop"
+            if require_location:
+                raise HTTPException(422, message)
         else:
-            delivery = 0 if zone.free_above is not None and subtotal >= zone.free_above else zone.charge
-            min_order = zone.min_order if zone.min_order is not None else s.min_order_value
+            delivery, pending, band = charge, False, band_label(km)
+    elif require_location:
+        raise HTTPException(422, "Please share your delivery location on the map")
     tax = ((subtotal - discount) * s.tax_percent + 50) // 100
     total = subtotal - discount + delivery + tax
     return QuoteOut(
         lines=lines, subtotal=subtotal, delivery_charge=delivery, discount_total=discount, tax_total=tax,
         total=total, coupon_code=coupon.code if coupon else None, meets_minimum=subtotal >= min_order,
-        min_order_value=min_order, delivery_pending=pending, zone_name=zone.name if zone else None,
+        min_order_value=min_order, delivery_pending=pending, distance_km=km, delivery_band=band,
+        deliverable=deliverable, delivery_message=message,
     ), coupon

@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session, selectinload
 from .. import models
 from ..db import get_db
 from ..pricing import get_settings
-from ..schemas import MenuOut, ProductOut, PublicSettings, ZoneOut
+from ..delivery import MAX_KM, rates_table
+from ..schemas import MenuOut, ProductOut, PublicSettings
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
@@ -44,6 +45,7 @@ def public_settings(db: Session = Depends(get_db)):
     return s
 
 
-@router.get("/zones", response_model=list[ZoneOut])
-def zones(db: Session = Depends(get_db)):
-    return db.scalars(select(models.DeliveryZone).where(models.DeliveryZone.is_active).order_by(models.DeliveryZone.city, models.DeliveryZone.name)).all()
+@router.get("/delivery-rates")
+def delivery_rates():
+    """The fixed delivery price list (by distance from the shop). Same rates for every order."""
+    return {"max_km": MAX_KM, "rates": rates_table()}
