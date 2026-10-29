@@ -58,6 +58,27 @@ def _create_tables_for_dev():
     ensure_schema()
     with SessionLocal() as db:  # make sure COD + Easypaisa are configured even on a fresh database
         ensure_payment_defaults(db)
+    _bootstrap_data()
+
+
+def _bootstrap_data():
+    """Fresh database? Add the starter menu and the admin account so the site works without a manual seed step.
+    Only fills what is missing; never overwrites or re-adds things you changed or deleted."""
+    from sqlalchemy import select
+    from . import models, seed
+    from .security import hash_password
+
+    with SessionLocal() as db:
+        if db.scalar(select(models.Category.id).limit(1)) is None:
+            seed.run()
+        email = (settings.admin_email or "").strip().lower()
+        if email and settings.admin_password:
+            if db.scalar(select(models.AdminUser).where(models.AdminUser.email == email)) is None:
+                db.add(models.AdminUser(email=email, password_hash=hash_password(settings.admin_password)))
+                db.commit()
+                logging.info("Created admin user %s", email)
+        elif db.scalar(select(models.AdminUser.id).limit(1)) is None:
+            logging.warning("No admin user exists and ADMIN_EMAIL / ADMIN_PASSWORD are not set: admin login will fail.")
 
 
 @app.get("/health")
