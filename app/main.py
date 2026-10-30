@@ -38,9 +38,14 @@ class NoStore:
 app = FastAPI(title="Cravy API", version="0.3.0")
 app.add_middleware(NoStore)
 app.add_middleware(GZipMiddleware, minimum_size=500)
+# Websites allowed to call this API from the browser. The live shop is always allowed, on top of whatever
+# CORS_ORIGINS lists (comma separated). A trailing "/" is ignored: browsers send the origin without it.
+LIVE_SITE_ORIGINS = {"https://eatcravy.netlify.app"}
+CORS_ALLOWED = sorted({o.strip().rstrip("/") for o in settings.cors_origins.split(",") if o.strip()} | LIVE_SITE_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
+    allow_origins=CORS_ALLOWED,
+    allow_origin_regex=r"https://[a-z0-9-]+--eatcravy\.netlify\.app",  # Netlify deploy previews of the same site
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Idempotency-Key", "Authorization"],
 )
