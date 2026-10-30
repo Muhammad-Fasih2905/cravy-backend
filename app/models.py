@@ -35,6 +35,7 @@ class Product(Base):
     is_bestseller: Mapped[bool] = mapped_column(Boolean, default=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
     prep_minutes: Mapped[int | None] = mapped_column(Integer)
+    discount_percent: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # set by the admin, 0-90 %
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
     category: Mapped[Category] = relationship(back_populates="products")

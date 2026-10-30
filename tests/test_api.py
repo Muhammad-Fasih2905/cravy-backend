@@ -136,6 +136,7 @@ def test_admin_requires_auth_and_manages_orders(client):
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+WEBP = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 32
 
 
 def test_uploads_are_validated_and_receipts_private(client, tmp_path, monkeypatch):
@@ -149,8 +150,9 @@ def test_uploads_are_validated_and_receipts_private(client, tmp_path, monkeypatc
     pid, vids, _ = ids(S, "demo-cold-drink")
     assert c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", PNG)}).status_code == 401
     assert c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", b"not an image")}, headers=h).status_code == 422
-    ok = c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", PNG)}, headers=h)
-    assert ok.status_code == 200 and ok.json()["image_url"].startswith("/media/products/")
+    assert c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.png", PNG)}, headers=h).status_code == 422  # products: WebP only
+    ok = c.post(f"/api/admin/products/{pid}/image", files={"file": ("x.webp", WEBP)}, headers=h)
+    assert ok.status_code == 200 and ok.json()["image_url"].startswith("/media/products/") and ok.json()["image_url"].endswith(".webp")
     body = {**ORDER, "payment_method": "EASYPAISA", "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
     n = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-55555555"}).json()["order_number"]
     assert c.post(f"/api/orders/{n}/receipt", data={"phone": "03000000000"}, files={"file": ("r.png", PNG)}).status_code == 404
@@ -395,3 +397,87 @@ def test_admin_settings_guard_payment_methods(client):
     pid, vids, _ = ids(S, "demo-cold-drink")
     body = {**ORDER, "items": [{"product_id": pid, "variant_id": vids[1], "quantity": 1}]}
     assert c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-ffffffff"}).status_code == 422  # COD switched off
+
+
+def _menu(c):
+    return {p["slug"]: p for cat in c.get("/api/menu").json()["categories"] for p in cat["products"]}
+
+
+def test_real_menu_import_prices_categories_and_cleanup(client):
+    from app import menu_seed
+    from app.menu_data import CATEGORIES, PRODUCTS
+    c, S = client
+    assert "demo-cold-drink" in _menu(c)  # the starter menu is there before the import
+    with S() as s:
+        first = menu_seed.import_menu(s)
+    assert first["products_added"] == 39 and first["demo_removed"] >= 1
+    cats = c.get("/api/menu").json()["categories"]
+    assert [x["slug"] for x in cats] == [slug for slug, _ in CATEGORIES]
+    assert [x["name"] for x in cats][:3] == ["Ice Cream", "Margaritas", "Mocktails"]
+    menu = _menu(c)
+    assert len(menu) == len(PRODUCTS) == 39 and not any(p["is_demo"] for p in menu.values())
+    # price = product price + size surcharge (the formula in the supplied data)
+    assert [(v["name"], v["price"]) for v in menu["mango"]["variants"]] == [("SINGLE", 160), ("DOUBLE", 275)]
+    assert [(v["name"], v["price"]) for v in menu["apple-mint-margarita"]["variants"]] == [("REGULAR", 360), ("LARGE", 500)]
+    assert [(v["name"], v["price"]) for v in menu["blue-lagoon"]["variants"]] == [("REGULAR", 500), ("LARGE", 645)]
+    assert [(v["name"], v["price"]) for v in menu["carrot-juice"]["variants"]] == [("REGULAR", 430), ("LARGE", 575)]
+    for slug, price in (("pina-colada", 400), ("lemon-soda", 215), ("cold-coffee", 500), ("banana-milk-shake", 360)):
+        assert menu[slug]["variants"] == [] and menu[slug]["base_price"] == price
+    assert {s for s, p in menu.items() if p["is_featured"]} == {"apple-mint-margarita", "lemon-margarita", "mint-margarita"}
+    assert all(p["image_url"] is None and p["is_available"] and p["discount_percent"] == 0 for p in menu.values())
+    # both "Banana Shake" products (ice-cream shake Rs.500, milk shake Rs.360) coexist
+    assert menu["banana-shake"]["base_price"] == 500 and menu["banana-milk-shake"]["name"] == "Banana Shake"
+    with S() as s:  # idempotent: a second run changes nothing, and never undoes the admin's edits
+        s.query(models.Product).filter_by(slug="mango").update({"base_price": 170})
+        s.commit()
+        assert menu_seed.import_menu(s) == {"categories_added": 0, "products_added": 0, "demo_removed": 0}
+        menu_seed.ensure_menu(s)
+    assert _menu(c)["mango"]["base_price"] == 170 and len(_menu(c)) == 39
+
+
+def test_admin_discount_applies_to_menu_and_checkout(client):
+    from app import menu_seed
+    c, S = client
+    with S() as s:
+        menu_seed.import_menu(s)
+    h = _admin_headers(c, S)
+    mango = _menu(c)["mango"]
+    assert mango["discount_percent"] == 0 and [v["final_price"] for v in mango["variants"]] == [160, 275]
+    assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 10}).status_code == 401
+    assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 91}, headers=h).status_code == 422
+    assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": -1}, headers=h).status_code == 422
+    r = c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 10}, headers=h)
+    assert r.status_code == 200 and r.json()["discount_percent"] == 10 and r.json()["final_base_price"] == 144
+    m = _menu(c)["mango"]
+    assert m["discount_percent"] == 10 and [v["price"] for v in m["variants"]] == [160, 275]  # regular prices stay visible
+    assert [v["final_price"] for v in m["variants"]] == [144, 248] and m["final_base_price"] == 144
+    assert next(p for p in c.get("/api/admin/products", headers=h).json() if p["slug"] == "mango")["discount_percent"] == 10
+    # the server charges the discounted price, whatever the client says
+    q = c.post("/api/cart/quote", json={"items": [{"product_id": m["id"], "variant_id": m["variants"][1]["id"], "quantity": 2}], **at_km(2.5)}).json()
+    assert q["lines"][0]["unit_price"] == 248 and q["lines"][0]["discount_percent"] == 10 and q["subtotal"] == 496 and q["total"] == 496 + 99
+    # products without sizes are discounted too; other products are untouched
+    cola = _menu(c)["pina-colada"]
+    c.patch(f"/api/admin/products/{cola['id']}", json={"discount_percent": 25}, headers=h)
+    assert _menu(c)["pina-colada"]["final_base_price"] == 300 and _menu(c)["oreo"]["discount_percent"] == 0
+    q2 = c.post("/api/cart/quote", json={"items": [{"product_id": cola["id"], "quantity": 1}], **at_km(2.5)}).json()
+    assert q2["lines"][0]["unit_price"] == 300
+    # removing the discount restores the regular price
+    c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 0}, headers=h)
+    assert [v["final_price"] for v in _menu(c)["mango"]["variants"]] == [160, 275]
+    # the order snapshot keeps the price that was charged
+    body = {**ORDER, "items": [{"product_id": cola["id"], "quantity": 1}]}
+    o = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-lllllllll"})
+    assert o.status_code == 201 and o.json()["subtotal"] == 300
+
+
+def test_startup_import_only_when_menu_missing(client):
+    from app import menu_seed
+    c, S = client
+    with S() as s:
+        menu_seed.ensure_menu(s)  # empty of real products -> imports
+    assert len(_menu(c)) == 39
+    h = _admin_headers(c, S)
+    c.delete(f"/api/admin/products/{_menu(c)['oreo']['id']}", headers=h)
+    with S() as s:
+        menu_seed.ensure_menu(s)  # the menu is present -> a deleted product is not brought back
+    assert "oreo" not in _menu(c) and len(_menu(c)) == 38

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from . import models
 from .config import settings as cfg
 from .delivery import MAX_KM, band_label, charge_for, haversine_km
+from .discounts import apply_discount
 from .schemas import QuoteIn, QuoteLine, QuoteOut
 
 
@@ -71,10 +72,11 @@ def build_quote(db: Session, data: QuoteIn, require_location: bool = False) -> t
             if a is None:
                 raise HTTPException(422, f"Invalid add-on for {p.name}")
             chosen.append({"name": a.name, "price": a.price})
-        unit = (variant.price if variant else p.base_price) + sum(a["price"] for a in chosen)
+        unit = apply_discount(variant.price if variant else p.base_price, p.discount_percent) + sum(a["price"] for a in chosen)
         lines.append(QuoteLine(
             product_id=p.id, product_name=p.name, variant_name=variant.name if variant else None,
             addons=chosen, unit_price=unit, quantity=item.quantity, line_total=unit * item.quantity,
+            discount_percent=p.discount_percent or 0,
         ))
     subtotal = sum(l.line_total for l in lines)
     s = get_settings(db)

@@ -76,6 +76,12 @@ def _bootstrap_data():
     with SessionLocal() as db:
         if db.scalar(select(models.Category.id).limit(1)) is None:
             seed.run()
+        try:  # the real Cravy menu; only if it is not in yet (see app/menu_seed.py)
+            from . import menu_seed
+            menu_seed.ensure_menu(db)
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logging.exception("Menu import failed (the site keeps running)")
         email = (settings.admin_email or "").strip().lower()
         if email and settings.admin_password:
             if db.scalar(select(models.AdminUser).where(models.AdminUser.email == email)) is None:

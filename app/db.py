@@ -88,6 +88,7 @@ def ensure_schema() -> None:
     wanted = {
         "orders": [("updated_at", ts), ("completed_at", ts), ("delivery_distance_km", flt), ("latitude", flt), ("longitude", flt)],
         "business_settings": [("shop_latitude", flt), ("shop_longitude", flt)],
+        "products": [("discount_percent", "INTEGER NOT NULL DEFAULT 0")],
     }
     insp = inspect(engine)
     with engine.begin() as conn:

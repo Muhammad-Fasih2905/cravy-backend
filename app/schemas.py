@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .discounts import apply_discount
 
 
 class Out(BaseModel):
@@ -10,8 +12,9 @@ class Out(BaseModel):
 class VariantOut(Out):
     id: int
     name: str
-    price: int
+    price: int  # regular price
     is_available: bool
+    final_price: int = 0  # price after the product discount: what the customer pays
 
 
 class AddonOut(Out):
@@ -34,8 +37,17 @@ class ProductOut(Out):
     is_featured: bool
     prep_minutes: int | None
     is_demo: bool
+    discount_percent: int = 0
+    final_base_price: int = 0  # base_price after the discount
     variants: list[VariantOut]
     addons: list[AddonOut]
+
+    @model_validator(mode="after")
+    def _apply_discount(self):
+        self.final_base_price = apply_discount(self.base_price, self.discount_percent)
+        for v in self.variants:
+            v.final_price = apply_discount(v.price, self.discount_percent)
+        return self
 
 
 class CategoryOut(Out):
@@ -84,6 +96,7 @@ class QuoteLine(BaseModel):
     unit_price: int
     quantity: int
     line_total: int
+    discount_percent: int = 0  # the product discount already included in unit_price
 
 
 class QuoteOut(BaseModel):

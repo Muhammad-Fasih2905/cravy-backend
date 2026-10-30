@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from .. import models
 from ..db import get_db
 from ..config import settings as cfg
+from ..discounts import apply_discount
 from ..payments import PK_MOBILE
 from ..pricing import get_settings
 from ..uploads import save_upload
@@ -261,12 +262,14 @@ class ProductPatch(BaseModel):
     is_available: bool | None = None
     is_bestseller: bool | None = None
     is_featured: bool | None = None
+    discount_percent: int | None = Field(default=None, ge=0, le=90)  # the admin's own discount for this product (0 = none)
 
 
 @router.get("/products")
 def list_products(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     return [{"id": p.id, "name": p.name, "slug": p.slug, "base_price": p.base_price, "is_available": p.is_available,
-             "is_bestseller": p.is_bestseller, "is_featured": p.is_featured, "is_demo": p.is_demo, "category": p.category.name, "image_url": p.image_url}
+             "is_bestseller": p.is_bestseller, "is_featured": p.is_featured, "is_demo": p.is_demo, "category": p.category.name, "image_url": p.image_url,
+             "discount_percent": p.discount_percent or 0, "final_base_price": apply_discount(p.base_price, p.discount_percent)}
             for p in db.scalars(select(models.Product).options(selectinload(models.Product.category)).order_by(models.Product.category_id, models.Product.sort_order))]
 
 
@@ -280,7 +283,7 @@ def patch_product(pid: int, data: ProductPatch, _: models.AdminUser = Depends(ge
     if "base_price" in data.model_fields_set or "name" in data.model_fields_set:
         p.is_demo = False if p.is_demo and ("name" in data.model_fields_set) else p.is_demo
     db.commit()
-    return {"id": p.id, "ok": True}
+    return {"id": p.id, "ok": True, "discount_percent": p.discount_percent or 0, "final_base_price": apply_discount(p.base_price, p.discount_percent)}
 
 
 @router.get("/orders/{n}/receipt")
@@ -328,7 +331,7 @@ async def product_image(pid: int, file: UploadFile = File(...), _: models.AdminU
     p = db.get(models.Product, pid)
     if p is None:
         raise HTTPException(404, "Product not found")
-    p.image_url = f"/media/products/{await save_upload(file, 'products', 3)}"
+    p.image_url = f"/media/products/{await save_upload(file, 'products', 3, webp_only=True)}"  # WebP only
     db.commit()
     return {"image_url": p.image_url}
 
