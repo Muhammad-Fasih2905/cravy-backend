@@ -55,7 +55,6 @@ app.include_router(catalog.router)
 app.include_router(orders.router)
 app.include_router(admin.router)
 
-
 @app.on_event("startup")
 def _create_tables_for_dev():
     # Dev convenience. In production use Alembic: `alembic upgrade head`.
