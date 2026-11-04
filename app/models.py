@@ -41,7 +41,36 @@ class Product(Base):
     category: Mapped[Category] = relationship(back_populates="products")
     variants: Mapped[list["Variant"]] = relationship(cascade="all, delete-orphan", order_by="Variant.sort_order")
     addons: Mapped[list["Addon"]] = relationship(cascade="all, delete-orphan", order_by="Addon.sort_order")
+    # Photo slots: slot 1 is the main photo (image_url always mirrors it), the next slots are the extra photos.
+    image_rows: Mapped[list["ProductImage"]] = relationship(cascade="all, delete-orphan", order_by="ProductImage.sort_order")
     __table_args__ = (Index("ix_products_cat", "category_id", "sort_order"),)
+
+    @property
+    def images(self) -> list[str]:
+        """Every photo of the product, in slot order. A product that only has the old single image_url still shows it."""
+        urls = [r.url for r in self.image_rows]
+        return urls or ([self.image_url] if self.image_url else [])
+
+    def set_images(self, urls: list[str]) -> None:
+        """Replace all photo slots with `urls` (in order) and keep image_url pointing at the first one."""
+        self.image_rows = [ProductImage(url=u, sort_order=i) for i, u in enumerate(urls)]
+        self.image_url = urls[0] if urls else None
+
+
+class ProductImage(Base):
+    """One photo slot of a product (WebP, stored under /media/products). sort_order 0 is the main photo."""
+    __tablename__ = "product_images"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    url: Mapped[str] = mapped_column(String(500))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AppMeta(Base):
+    """Tiny key/value store for the app's own bookkeeping (e.g. which version of the menu file was last imported)."""
+    __tablename__ = "app_meta"
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[str] = mapped_column(String(200))
 
 
 class Variant(Base):

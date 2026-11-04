@@ -417,16 +417,16 @@ def test_real_menu_import_prices_categories_and_cleanup(client):
     menu = _menu(c)
     assert len(menu) == len(PRODUCTS) == 39 and not any(p["is_demo"] for p in menu.values())
     # price = product price + size surcharge (the formula in the supplied data)
-    assert [(v["name"], v["price"]) for v in menu["mango"]["variants"]] == [("SINGLE", 160), ("DOUBLE", 275)]
-    assert [(v["name"], v["price"]) for v in menu["apple-mint-margarita"]["variants"]] == [("REGULAR", 360), ("LARGE", 500)]
-    assert [(v["name"], v["price"]) for v in menu["blue-lagoon"]["variants"]] == [("REGULAR", 500), ("LARGE", 645)]
-    assert [(v["name"], v["price"]) for v in menu["carrot-juice"]["variants"]] == [("REGULAR", 430), ("LARGE", 575)]
-    for slug, price in (("pina-colada", 400), ("lemon-soda", 215), ("cold-coffee", 500), ("banana-milk-shake", 360)):
-        assert menu[slug]["variants"] == [] and menu[slug]["base_price"] == price
+    assert [(v["name"], v["price"]) for v in menu["mango"]["variants"]] == [("SINGLE", 139), ("DOUBLE", 219)]
+    assert [(v["name"], v["price"]) for v in menu["apple-mint-margarita"]["variants"]] == [("REGULAR", 249), ("LARGE", 349)]
+    assert [(v["name"], v["price"]) for v in menu["blue-lagoon"]["variants"]] == [("REGULAR", 349), ("LARGE", 449)]
+    assert [(v["name"], v["price"]) for v in menu["carrot-juice"]["variants"]] == [("REGULAR", 299), ("LARGE", 399)]
+    for slug, price, big in (("pina-colada", 279, 349), ("lemon", 149, 199), ("cold-coffee", 349, 449), ("banana-shake-milk-shakes", 249, 299)):
+        assert menu[slug]["base_price"] == price and [v["price"] for v in menu[slug]["variants"]] == [price, big]
     assert {s for s, p in menu.items() if p["is_featured"]} == {"apple-mint-margarita", "lemon-margarita", "mint-margarita"}
-    assert all(p["image_url"] is None and p["is_available"] and p["discount_percent"] == 0 for p in menu.values())
-    # both "Banana Shake" products (ice-cream shake Rs.500, milk shake Rs.360) coexist
-    assert menu["banana-shake"]["base_price"] == 500 and menu["banana-milk-shake"]["name"] == "Banana Shake"
+    assert all(p["image_url"] is None and p["images"] == [] and p["is_available"] and p["discount_percent"] == 0 for p in menu.values())
+    # both "Banana Shake" products (ice-cream shake Rs.349, milk shake Rs.249) coexist
+    assert menu["banana-shake"]["base_price"] == 349 and menu["banana-shake-milk-shakes"]["name"] == "Banana Shake"
     with S() as s:  # idempotent: a second run changes nothing, and never undoes the admin's edits
         s.query(models.Product).filter_by(slug="mango").update({"base_price": 170})
         s.commit()
@@ -442,32 +442,32 @@ def test_admin_discount_applies_to_menu_and_checkout(client):
         menu_seed.import_menu(s)
     h = _admin_headers(c, S)
     mango = _menu(c)["mango"]
-    assert mango["discount_percent"] == 0 and [v["final_price"] for v in mango["variants"]] == [160, 275]
+    assert mango["discount_percent"] == 0 and [v["final_price"] for v in mango["variants"]] == [139, 219]
     assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 10}).status_code == 401
     assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 91}, headers=h).status_code == 422
     assert c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": -1}, headers=h).status_code == 422
     r = c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 10}, headers=h)
-    assert r.status_code == 200 and r.json()["discount_percent"] == 10 and r.json()["final_base_price"] == 144
+    assert r.status_code == 200 and r.json()["discount_percent"] == 10 and r.json()["final_base_price"] == 125
     m = _menu(c)["mango"]
-    assert m["discount_percent"] == 10 and [v["price"] for v in m["variants"]] == [160, 275]  # regular prices stay visible
-    assert [v["final_price"] for v in m["variants"]] == [144, 248] and m["final_base_price"] == 144
+    assert m["discount_percent"] == 10 and [v["price"] for v in m["variants"]] == [139, 219]  # regular prices stay visible
+    assert [v["final_price"] for v in m["variants"]] == [125, 197] and m["final_base_price"] == 125
     assert next(p for p in c.get("/api/admin/products", headers=h).json() if p["slug"] == "mango")["discount_percent"] == 10
     # the server charges the discounted price, whatever the client says
     q = c.post("/api/cart/quote", json={"items": [{"product_id": m["id"], "variant_id": m["variants"][1]["id"], "quantity": 2}], **at_km(2.5)}).json()
-    assert q["lines"][0]["unit_price"] == 248 and q["lines"][0]["discount_percent"] == 10 and q["subtotal"] == 496 and q["total"] == 496 + 99
-    # products without sizes are discounted too; other products are untouched
+    assert q["lines"][0]["unit_price"] == 197 and q["lines"][0]["discount_percent"] == 10 and q["subtotal"] == 394 and q["total"] == 394 + 99
+    # the base price is discounted too; other products are untouched
     cola = _menu(c)["pina-colada"]
     c.patch(f"/api/admin/products/{cola['id']}", json={"discount_percent": 25}, headers=h)
-    assert _menu(c)["pina-colada"]["final_base_price"] == 300 and _menu(c)["oreo"]["discount_percent"] == 0
-    q2 = c.post("/api/cart/quote", json={"items": [{"product_id": cola["id"], "quantity": 1}], **at_km(2.5)}).json()
-    assert q2["lines"][0]["unit_price"] == 300
+    assert _menu(c)["pina-colada"]["final_base_price"] == 209 and _menu(c)["oreo"]["discount_percent"] == 0
+    q2 = c.post("/api/cart/quote", json={"items": [{"product_id": cola["id"], "variant_id": cola["variants"][0]["id"], "quantity": 1}], **at_km(2.5)}).json()
+    assert q2["lines"][0]["unit_price"] == 209
     # removing the discount restores the regular price
     c.patch(f"/api/admin/products/{mango['id']}", json={"discount_percent": 0}, headers=h)
-    assert [v["final_price"] for v in _menu(c)["mango"]["variants"]] == [160, 275]
+    assert [v["final_price"] for v in _menu(c)["mango"]["variants"]] == [139, 219]
     # the order snapshot keeps the price that was charged
-    body = {**ORDER, "items": [{"product_id": cola["id"], "quantity": 1}]}
+    body = {**ORDER, "items": [{"product_id": cola["id"], "variant_id": cola["variants"][0]["id"], "quantity": 2}]}  # 2 x 209 (the shop's minimum order is Rs. 300)
     o = c.post("/api/orders", json=body, headers={"Idempotency-Key": "key-lllllllll"})
-    assert o.status_code == 201 and o.json()["subtotal"] == 300
+    assert o.status_code == 201 and o.json()["subtotal"] == 418
 
 
 def test_startup_import_only_when_menu_missing(client):
@@ -481,3 +481,115 @@ def test_startup_import_only_when_menu_missing(client):
     with S() as s:
         menu_seed.ensure_menu(s)  # the menu is present -> a deleted product is not brought back
     assert "oreo" not in _menu(c) and len(_menu(c)) == 38
+
+
+def _old_menu_in_db(S):
+    """An already-deployed database: the previous menu (old prices, old slugs) and one product with a photo and a discount."""
+    from app.menu_seed import _new_product  # noqa: F401  (same constructor the importer uses)
+    with S() as s:
+        cat = {c.slug: c for c in s.query(models.Category).all()}
+        ice = models.Category(slug="ice-cream", name="Ice Cream", sort_order=0)
+        soda = models.Category(slug="soda", name="Soda", sort_order=5)
+        s.add_all([ice, soda]); s.flush()
+        s.add_all([
+            models.Product(slug="mango", name="Mango", category_id=ice.id, base_price=160, description="old", is_demo=False,
+                           discount_percent=10, image_url="/media/products/mine.webp",
+                           variants=[models.Variant(name="SINGLE", price=160, sort_order=0), models.Variant(name="DOUBLE", price=275, sort_order=1)]),
+            models.Product(slug="lemon-soda", name="Lemon", category_id=soda.id, base_price=215, is_demo=False),  # not in the new menu
+            models.Product(slug="my-own-special", name="Chef special", category_id=soda.id, base_price=500, is_demo=False),  # added by the admin
+        ])
+        s.commit()
+
+
+def test_new_menu_file_is_applied_once_to_an_existing_database(client):
+    from app import menu_seed
+    c, S = client
+    _old_menu_in_db(S)
+    with S() as s:
+        menu_seed.ensure_menu(s)  # old menu present, new menu file never applied -> sync
+    menu = _menu(c)
+    assert len(menu) == 39 + 1  # the 39 products of the file + the admin's own product, which is left alone
+    assert "my-own-special" in menu and "lemon-soda" not in menu and "lemon" in menu  # old product gone, its replacement in
+    assert not any(p["is_demo"] for p in menu.values())
+    m = menu["mango"]
+    assert m["base_price"] == 139 and m["description"].startswith("Tropical mango") and [(v["name"], v["price"]) for v in m["variants"]] == [("SINGLE", 139), ("DOUBLE", 219)]
+    assert m["discount_percent"] == 10 and m["image_url"] == "/media/products/mine.webp" and m["images"] == ["/media/products/mine.webp"]  # admin's work kept
+    assert [x["slug"] for x in c.get("/api/menu").json()["categories"]][:3] == ["ice-cream", "margaritas", "mocktails"]
+    # it ran once: a later edit and a later restart are not undone
+    with S() as s:
+        s.query(models.Product).filter_by(slug="mango").update({"base_price": 150}); s.commit()
+        menu_seed.ensure_menu(s)
+    assert _menu(c)["mango"]["base_price"] == 150
+    # the owner replaces the menu file with a new version -> applied once more
+    monkey = menu_seed
+    with S() as s:
+        s.query(models.AppMeta).delete(); s.commit()
+        menu_seed.ensure_menu(s)
+    assert _menu(c)["mango"]["base_price"] == 139
+    assert monkey.CATALOG_SHA
+
+
+def test_menu_file_real_photos_fill_slots_and_placeholders_are_ignored(client, monkeypatch):
+    from app import menu_data, menu_seed
+    c, S = client
+    monkeypatch.setitem(menu_data.EXTRAS, "oreo", {**menu_data.EXTRAS["oreo"], "images": ["/media/products/a.webp", "/media/products/b.webp", "https://cdn.x/c.webp"]})
+    with S() as s:
+        menu_seed.import_menu(s)
+    menu = _menu(c)
+    assert menu["oreo"]["images"] == ["/media/products/a.webp", "/media/products/b.webp", "https://cdn.x/c.webp"]
+    assert menu["oreo"]["image_url"] == "/media/products/a.webp"
+    assert menu["mango"]["images"] == []  # the file's "products/mango.jpg" is a placeholder: not used
+    assert menu_data._real_images({"image": "products/mango.jpg"}) == [] and menu_data._real_images({"images": ["/media/products/x.png"]}) == []
+
+
+def test_product_can_have_several_photo_slots(client, monkeypatch, tmp_path):
+    from app import menu_seed
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "upload_dir", str(tmp_path))
+    c, S = client
+    with S() as s:
+        menu_seed.import_menu(s)
+    h = _admin_headers(c, S)
+    pid = _menu(c)["mango"]["id"]
+    def up(path):  # one file to a slot
+        return c.post(path, files={"file": ("x.webp", WEBP)}, headers=h)
+
+    r1 = up(f"/api/admin/products/{pid}/image")  # slot 0 = main photo, as before
+    assert r1.status_code == 200 and len(r1.json()["images"]) == 1 and r1.json()["image_url"] == r1.json()["images"][0]
+    r2 = up(f"/api/admin/products/{pid}/image?slot=1")
+    r3 = c.post(f"/api/admin/products/{pid}/images", files=[("files", ("a.webp", WEBP)), ("files", ("b.webp", WEBP))], headers=h)
+    assert r2.status_code == 200 and r3.status_code == 200 and len(r3.json()["images"]) == 4
+    m = _menu(c)["mango"]  # the public menu shows every photo, in slot order, and the main one first
+    assert m["images"] == r3.json()["images"] and m["image_url"] == m["images"][0] and all(u.endswith(".webp") for u in m["images"])
+    assert c.get("/api/products/mango").json()["images"] == m["images"]
+    first, second = m["images"][0], m["images"][1]
+    r4 = up(f"/api/admin/products/{pid}/image?slot=1")  # replacing a slot keeps the others
+    assert r4.json()["images"][0] == first and r4.json()["images"][1] != second and len(r4.json()["images"]) == 4
+    d = c.delete(f"/api/admin/products/{pid}/image?slot=0", headers=h)  # removing the main photo promotes the next one
+    assert d.status_code == 200 and len(d.json()["images"]) == 3 and d.json()["image_url"] == d.json()["images"][0] != first
+    assert c.delete(f"/api/admin/products/{pid}/image?slot=7", headers=h).status_code == 404
+    assert next(p for p in c.get("/api/admin/products", headers=h).json() if p["slug"] == "mango")["images"] == d.json()["images"]
+    # guards: admin only, WebP only (nothing is added if one file is bad), at most 8 photos
+    assert c.post(f"/api/admin/products/{pid}/images", files=[("files", ("a.webp", WEBP))]).status_code == 401
+    bad = c.post(f"/api/admin/products/{pid}/images", files=[("files", ("a.webp", WEBP)), ("files", ("b.png", PNG))], headers=h)
+    assert bad.status_code == 422 and len(_menu(c)["mango"]["images"]) == 3
+    too_many = c.post(f"/api/admin/products/{pid}/images", files=[("files", (f"{i}.webp", WEBP)) for i in range(6)], headers=h)
+    assert too_many.status_code == 422 and len(_menu(c)["mango"]["images"]) == 3
+    c.delete(f"/api/admin/products/{pid}", headers=h)  # deleting the product removes its photo slots with it
+    with S() as s:
+        assert s.query(models.ProductImage).filter_by(product_id=pid).count() == 0
+
+
+def test_old_single_image_product_is_shown_and_can_get_more_slots(client, monkeypatch, tmp_path):
+    from app import menu_seed
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "upload_dir", str(tmp_path))
+    c, S = client
+    with S() as s:
+        menu_seed.import_menu(s)
+        s.query(models.Product).filter_by(slug="oreo").update({"image_url": "/media/products/old.webp"}); s.commit()
+    h = _admin_headers(c, S)
+    o = _menu(c)["oreo"]
+    assert o["images"] == ["/media/products/old.webp"] and o["image_url"] == "/media/products/old.webp"  # a product from before the slots existed
+    r = c.post(f"/api/admin/products/{o['id']}/image?slot=1", files={"file": ("n.webp", WEBP)}, headers=h)
+    assert r.status_code == 200 and r.json()["images"][0] == "/media/products/old.webp" and len(r.json()["images"]) == 2

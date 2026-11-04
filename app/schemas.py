@@ -30,7 +30,8 @@ class ProductOut(Out):
     name: str
     slug: str
     description: str | None
-    image_url: str | None
+    image_url: str | None  # the main photo (same as images[0])
+    images: list[str] = []  # all photos in slot order; show every one of them (gallery)
     base_price: int
     is_available: bool
     is_bestseller: bool

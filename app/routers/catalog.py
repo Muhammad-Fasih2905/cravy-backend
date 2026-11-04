@@ -22,6 +22,7 @@ def menu(response: Response, db: Session = Depends(get_db)):
         .options(
             selectinload(models.Category.products).selectinload(models.Product.variants),
             selectinload(models.Category.products).selectinload(models.Product.addons),
+            selectinload(models.Category.products).selectinload(models.Product.image_rows),
         )
     ).all()
     return {"categories": cats}
@@ -31,7 +32,7 @@ def menu(response: Response, db: Session = Depends(get_db)):
 def product(slug: str, db: Session = Depends(get_db)):
     p = db.scalar(
         select(models.Product).where(models.Product.slug == slug)
-        .options(selectinload(models.Product.variants), selectinload(models.Product.addons))
+        .options(selectinload(models.Product.variants), selectinload(models.Product.addons), selectinload(models.Product.image_rows))
     )
     if p is None:
         raise HTTPException(404, "Product not found")

@@ -7,7 +7,7 @@ from pathlib import Path
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import desc, func, or_, select
@@ -268,9 +268,9 @@ class ProductPatch(BaseModel):
 @router.get("/products")
 def list_products(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     return [{"id": p.id, "name": p.name, "slug": p.slug, "base_price": p.base_price, "is_available": p.is_available,
-             "is_bestseller": p.is_bestseller, "is_featured": p.is_featured, "is_demo": p.is_demo, "category": p.category.name, "image_url": p.image_url,
+             "is_bestseller": p.is_bestseller, "is_featured": p.is_featured, "is_demo": p.is_demo, "category": p.category.name, "image_url": p.image_url, "images": p.images,
              "discount_percent": p.discount_percent or 0, "final_base_price": apply_discount(p.base_price, p.discount_percent)}
-            for p in db.scalars(select(models.Product).options(selectinload(models.Product.category)).order_by(models.Product.category_id, models.Product.sort_order))]
+            for p in db.scalars(select(models.Product).options(selectinload(models.Product.category), selectinload(models.Product.image_rows)).order_by(models.Product.category_id, models.Product.sort_order))]
 
 
 @router.patch("/products/{pid}")
@@ -326,14 +326,62 @@ def delete_product(pid: int, _: models.AdminUser = Depends(get_admin), db: Sessi
     return {"ok": True}
 
 
-@router.post("/products/{pid}/image")
-async def product_image(pid: int, file: UploadFile = File(...), _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
-    p = db.get(models.Product, pid)
+MAX_IMAGES = 8  # photo slots per product
+
+
+def _product_for_images(db: Session, pid: int) -> models.Product:
+    p = db.scalar(select(models.Product).where(models.Product.id == pid).options(selectinload(models.Product.image_rows)))
     if p is None:
         raise HTTPException(404, "Product not found")
-    p.image_url = f"/media/products/{await save_upload(file, 'products', 3, webp_only=True)}"  # WebP only
+    return p
+
+
+def _images_out(p: models.Product) -> dict:
+    return {"image_url": p.image_url, "images": p.images}
+
+
+@router.post("/products/{pid}/image")
+async def product_image(pid: int, file: UploadFile = File(...), slot: int = Query(0, ge=0, lt=MAX_IMAGES),
+                        _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Put one WebP photo in a slot. slot=0 is the main photo (the default, as before). A slot that already has a photo
+    is replaced; a slot after the last one is added at the end (so the photos always stay in order, with no gaps)."""
+    p = _product_for_images(db, pid)
+    urls = p.images
+    url = f"/media/products/{await save_upload(file, 'products', 3, webp_only=True)}"  # WebP only
+    if slot < len(urls):
+        urls[slot] = url
+    elif len(urls) < MAX_IMAGES:
+        urls.append(url)
+    p.set_images(urls)
     db.commit()
-    return {"image_url": p.image_url}
+    return _images_out(p)
+
+
+@router.post("/products/{pid}/images")
+async def product_images_add(pid: int, files: list[UploadFile] = File(...),
+                             _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Add several WebP photos at once. They fill the next free slots, in the order they were sent."""
+    p = _product_for_images(db, pid)
+    urls = p.images
+    if len(urls) + len(files) > MAX_IMAGES:
+        raise HTTPException(422, f"A product can have at most {MAX_IMAGES} photos")
+    saved = [f"/media/products/{await save_upload(f, 'products', 3, webp_only=True)}" for f in files]  # nothing is added if one is not WebP
+    p.set_images(urls + saved)
+    db.commit()
+    return _images_out(p)
+
+
+@router.delete("/products/{pid}/image")
+def product_image_delete(pid: int, slot: int = Query(0, ge=0, lt=MAX_IMAGES), _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Remove the photo in a slot; the photos after it move up one slot."""
+    p = _product_for_images(db, pid)
+    urls = p.images
+    if slot >= len(urls):
+        raise HTTPException(404, "No photo in that slot")
+    del urls[slot]
+    p.set_images(urls)
+    db.commit()
+    return _images_out(p)
 
 
 # ---- sizes (variants) and toppings (add-ons) ----
