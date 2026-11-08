@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -297,6 +297,27 @@ def get_receipt(n: str, _: models.AdminUser = Depends(get_admin_flex), db: Sessi
 @router.get("/categories")
 def categories(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
     return [{"id": c.id, "name": c.name} for c in db.scalars(select(models.Category).order_by(models.Category.sort_order))]
+
+
+class CategoryNew(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    name: str = Field(min_length=2, max_length=80)
+
+
+@router.post("/categories", status_code=201)
+def create_category(data: CategoryNew, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Add a menu category from the admin panel. A name that already exists (any capitalisation) returns that category, never a duplicate."""
+    name = re.sub(r"\s+", " ", data.name).strip()
+    same = db.scalar(select(models.Category).where(func.lower(models.Category.name) == name.lower()))
+    if same is not None:
+        return {"id": same.id, "name": same.name, "slug": same.slug, "created": False}
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "category"
+    if db.scalar(select(models.Category.id).where(models.Category.slug == slug)):
+        slug = f"{slug}-{secrets.token_hex(2)}"
+    last = db.scalar(select(func.max(models.Category.sort_order))) or 0
+    c = models.Category(name=name, slug=slug, sort_order=last + 1, is_active=True)
+    db.add(c); db.commit()
+    return {"id": c.id, "name": c.name, "slug": c.slug, "created": True}
 
 
 class ProductNew(BaseModel):

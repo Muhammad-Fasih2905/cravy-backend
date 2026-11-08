@@ -27,3 +27,6 @@ All photos are **WebP only** (checked by file content, max 3 MB each); other for
 - `DELETE /api/admin/products/{id}/image?slot=N`: removes that photo; the later ones move up (so slot 0, the main photo, is always filled while any photo exists).
 - `app/menu_catalog.json` may also list ready photos: `"images": ["/media/products/a.webp", ...]` (or `"image"`); only real `.webp` addresses (starting with `/media/` or `http`) are used, the placeholder paths like `products/mango.jpg` are ignored.
 Uploaded files are stored in the folder given by `UPLOAD_DIR`. On Railway the disk is wiped on every deploy, so mount a Volume and point `UPLOAD_DIR` at it, otherwise the images disappear after a redeploy.
+
+## Adding a category from the admin panel
+`POST /api/admin/categories {"name": "Waffles"}` (admin only) creates the category and returns `{id, name, slug, created}`. The same name (any capitalisation) returns the existing category instead of a duplicate. The admin "Add a new product" form has a "New category" button that uses it and selects the new category for the product. On the menu page a category that is not listed in `config/menuGroups.ts` appears under the "More" heading.

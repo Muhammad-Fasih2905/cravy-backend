@@ -593,3 +593,20 @@ def test_old_single_image_product_is_shown_and_can_get_more_slots(client, monkey
     assert o["images"] == ["/media/products/old.webp"] and o["image_url"] == "/media/products/old.webp"  # a product from before the slots existed
     r = c.post(f"/api/admin/products/{o['id']}/image?slot=1", files={"file": ("n.webp", WEBP)}, headers=h)
     assert r.status_code == 200 and r.json()["images"][0] == "/media/products/old.webp" and len(r.json()["images"]) == 2
+
+
+def test_admin_can_add_category_then_product_in_it(client):
+    c, S = client
+    h = _admin_headers(c, S)
+    assert c.post("/api/admin/categories", json={"name": "Waffles"}).status_code in (401, 403)  # admin only
+    r = c.post("/api/admin/categories", json={"name": "  Hot   Waffles "}, headers=h)
+    assert r.status_code == 201 and r.json()["name"] == "Hot Waffles" and r.json()["slug"] == "hot-waffles" and r.json()["created"] is True
+    cid = r.json()["id"]
+    again = c.post("/api/admin/categories", json={"name": "hot waffles"}, headers=h).json()  # same name: no duplicate
+    assert again["id"] == cid and again["created"] is False
+    assert cid in [x["id"] for x in c.get("/api/admin/categories", headers=h).json()]
+    before = len(c.get("/api/admin/products", headers=h).json())
+    pid = c.post("/api/admin/products", json={"name": "Choco Waffle", "category_id": cid, "base_price": 350}, headers=h).json()["id"]
+    assert len(c.get("/api/admin/products", headers=h).json()) == before + 1
+    menu = {x["slug"]: x for x in c.get("/api/menu").json()["categories"]}
+    assert [p["id"] for p in menu["hot-waffles"]["products"]] == [pid]
