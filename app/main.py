@@ -78,6 +78,7 @@ def _bootstrap_data():
         try:  # the real Cravy menu; only if it is not in yet (see app/menu_seed.py)
             from . import menu_seed
             menu_seed.ensure_menu(db)
+            menu_seed.ensure_default_pairings(db)
         except Exception:  # noqa: BLE001
             db.rollback()
             logging.exception("Menu import failed (the site keeps running)")

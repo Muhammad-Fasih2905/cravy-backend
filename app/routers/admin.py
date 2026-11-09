@@ -453,3 +453,53 @@ def put_options(pid: int, data: OptionsIn, _: models.AdminUser = Depends(get_adm
     _sync(db, list(p.addons), data.addons, models.Addon, p.id)
     db.commit(); db.refresh(p)
     return {"variants": _opts(p.variants), "addons": _opts(p.addons)}
+
+
+# ---- "Frequently bought together": which other products are suggested next to a product
+MAX_BUNDLE = 8
+
+
+class BundleIn(BaseModel):
+    product_ids: list[int] = Field(default_factory=list, max_length=MAX_BUNDLE)
+
+
+def _bundle_out(p: models.Product) -> dict:
+    return {"product_ids": [r.paired_id for r in p.pairings],
+            "items": [{"id": r.paired.id, "name": r.paired.name, "category": r.paired.category.name if r.paired.category else None,
+                       "image_url": r.paired.image_url, "price": r.paired.base_price, "is_available": r.paired.is_available} for r in p.pairings]}
+
+
+def _bundle_product(db: Session, pid: int) -> models.Product:
+    p = db.scalar(select(models.Product).where(models.Product.id == pid).options(
+        selectinload(models.Product.pairings).selectinload(models.ProductPairing.paired).selectinload(models.Product.category)))
+    if p is None:
+        raise HTTPException(404, "Product not found")
+    return p
+
+
+@router.get("/products/{pid}/bundle")
+def get_bundle(pid: int, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    return _bundle_out(_bundle_product(db, pid))
+
+
+@router.put("/products/{pid}/bundle")
+def put_bundle(pid: int, data: BundleIn, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Replace the suggestions of a product (the order you send is the order shown). Any product can be suggested next to any other."""
+    p = _bundle_product(db, pid)
+    ids = list(dict.fromkeys(data.product_ids))  # no duplicates, keep order
+    if pid in ids:
+        raise HTTPException(422, "A product cannot be suggested next to itself")
+    found = set(db.scalars(select(models.Product.id).where(models.Product.id.in_(ids))).all()) if ids else set()
+    if found != set(ids):
+        raise HTTPException(422, "Unknown product in the list")
+    by_paired = {r.paired_id: r for r in p.pairings}
+    for r in list(p.pairings):
+        if r.paired_id not in ids:
+            p.pairings.remove(r)  # delete-orphan
+    for n, i in enumerate(ids):
+        if i in by_paired:
+            by_paired[i].sort_order = n
+        else:
+            p.pairings.append(models.ProductPairing(paired_id=i, sort_order=n))
+    db.commit()
+    return _bundle_out(_bundle_product(db, pid))
