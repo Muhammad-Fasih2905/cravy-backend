@@ -30,3 +30,9 @@ Uploaded files are stored in the folder given by `UPLOAD_DIR`. On Railway the di
 
 ## Adding a category from the admin panel
 `POST /api/admin/categories {"name": "Waffles"}` (admin only) creates the category and returns `{id, name, slug, created}`. The same name (any capitalisation) returns the existing category instead of a duplicate. The admin "Add a new product" form has a "New category" button that uses it and selects the new category for the product. On the menu page a category that is not listed in `config/menuGroups.ts` appears under the "More" heading.
+
+## Menu file on an already-deployed site
+When `menu_catalog.json` changes, the next start only ADDS categories/products the database does not have. Nothing that exists is changed or removed, so admin edits (prices, photos, sizes, new categories/products) are safe. To overwrite everything from the file on purpose: `python -m app.menu_seed --sync`.
+
+## Frequently bought together
+Each product can list other products (any menu, up to 8) that are suggested under it with their picture and price. `GET/PUT /api/admin/products/{id}/bundle` (admin only; PUT body `{"product_ids":[...]}`, order = display order). The public menu / product output has `bundle: [{id, name, slug, image_url, variant_id, variant_name, price}]` (only products that are available). The customer ticks them and each is added to the cart as its own line, priced again by the server. Loaded Waffle -> Vanilla Cream Waffle is set once at startup; after that only the admin changes it. New table: `product_pairings` (created automatically).

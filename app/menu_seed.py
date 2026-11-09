@@ -5,8 +5,9 @@
 * The placeholder "Demo ..." products from the starter seed are removed once the real menu is in
   (past orders keep their own name/price snapshots, so no order is affected).
 * On startup it runs only if none of the real products exist yet (see ensure_menu).
-* When the menu file (app/menu_catalog.json) is replaced with a new version, sync_menu() applies it ONCE on the next
-  start: products are matched by slug and updated (name, text, category, price, sizes, order, featured, available),
+* When the menu file (app/menu_catalog.json) is replaced with a new version, the next start ADDS only the categories and
+  products the database does not have yet and changes nothing else (the admin's edits are safe). To overwrite everything
+  from the file, run  python -m app.menu_seed --sync . That full sync matches products by slug and updates (name, text, category, price, sizes, order, featured, available),
   new ones are added, and the products of the previous menu that are no longer in the file are removed. The admin's own
   discounts and uploaded photos are kept.
 Run by hand:  python -m app.menu_seed            (insert-only, safe to repeat)
@@ -95,8 +96,11 @@ def import_menu(db: Session) -> dict:
     return {"categories_added": added_cats, "products_added": added_products, "demo_removed": removed}
 
 
-def sync_menu(db: Session) -> dict:
+def sync_menu(db: Session, overwrite: bool = True) -> dict:
     """Make the database match the menu file. Products are matched by slug.
+    overwrite=False (what the startup uses): ONLY add categories/products the database does not have yet. Nothing that
+    exists is changed or removed, so edits made in the admin panel (prices, photos, sizes, descriptions, new
+    categories and products) survive a redeploy. overwrite=True (python -m app.menu_seed --sync): the full update below.
     Updated: name, description, category, price, sizes, toppings, order, featured, available (and photos the file lists).
     Kept as they are: the admin's discount and the photos uploaded from the admin panel.
     Removed: starter "Demo ..." products and the products of the previous menu that the file no longer has."""
@@ -106,7 +110,8 @@ def sync_menu(db: Session) -> dict:
         if c is None:
             c = models.Category(slug=slug, name=name, sort_order=i, is_active=True)
             db.add(c)
-        c.name, c.sort_order, c.is_active = name, i, True
+        elif overwrite:
+            c.name, c.sort_order, c.is_active = name, i, True
         cats[slug] = c
     db.flush()
     updated = added = 0
@@ -120,6 +125,8 @@ def sync_menu(db: Session) -> dict:
             db.add(_new_product(slug, name, cats[cat_slug].id, description, price, sizes, featured, order))
             added += 1
             continue
+        if not overwrite:
+            continue  # already in the database: leave it exactly as the admin has it
         p.name, p.description, p.category_id, p.base_price = name, description, cats[cat_slug].id, price
         p.is_featured, p.is_available, p.sort_order, p.is_demo = featured, EXTRAS[slug]["available"], order, False
         p.variants = _variants(price, sizes)
@@ -129,17 +136,45 @@ def sync_menu(db: Session) -> dict:
         updated += 1
     db.flush()
     removed = 0
-    for p in db.scalars(select(models.Product)).all():
-        if p.slug not in keep and (p.is_demo or p.slug in LEGACY_SLUGS):
-            db.delete(p)  # past orders keep their own name/price snapshots
-            removed += 1
-    db.flush()
-    for c in db.scalars(select(models.Category)).all():  # starter categories left empty by the clean-up
-        if c.slug not in cats and not c.products:
-            db.delete(c)
+    if overwrite:
+        for p in db.scalars(select(models.Product)).all():
+            if p.slug not in keep and (p.is_demo or p.slug in LEGACY_SLUGS):
+                db.delete(p)  # past orders keep their own name/price snapshots
+                removed += 1
+        db.flush()
+        for c in db.scalars(select(models.Category)).all():  # starter categories left empty by the clean-up
+            if c.slug not in cats and not c.products:
+                db.delete(c)
     _set_meta(db, CATALOG_SHA)
     db.commit()
     return {"products_updated": updated, "products_added": added, "products_removed": removed}
+
+
+PAIR_SEED_KEY = "bundle_seed_v1"
+DEFAULT_PAIRINGS = [("loaded-waffle", ["vanilla-cream-waffle"])]  # (product, its "Frequently bought together" products)
+
+
+def ensure_default_pairings(db: Session) -> None:
+    """Runs once ever: Loaded Waffle gets Vanilla Cream Waffle as a suggestion. After that the admin owns the lists
+    (removing it in the admin panel is never undone). Skipped, and tried again next start, if the products are not there yet."""
+    if db.get(models.AppMeta, PAIR_SEED_KEY) is not None:
+        return
+    done = True
+    for slug, others in DEFAULT_PAIRINGS:
+        p = db.scalar(select(models.Product).where(models.Product.slug == slug))
+        if p is None:
+            done = False
+            continue
+        have = {r.paired_id for r in p.pairings}
+        for o in others:
+            q = db.scalar(select(models.Product).where(models.Product.slug == o))
+            if q is None:
+                done = False
+            elif q.id not in have and q.id != p.id:
+                p.pairings.append(models.ProductPairing(paired_id=q.id, sort_order=len(p.pairings)))
+    if done:
+        db.add(models.AppMeta(key=PAIR_SEED_KEY, value="1"))
+    db.commit()
 
 
 def ensure_menu(db: Session) -> None:
@@ -153,7 +188,7 @@ def ensure_menu(db: Session) -> None:
     ) is None:
         log.info("Menu import: %s", import_menu(db))
     elif _get_meta(db) != CATALOG_SHA:
-        log.info("Menu update from menu_catalog.json: %s", sync_menu(db))
+        log.info("Menu update from menu_catalog.json (adds what is missing, changes nothing else): %s", sync_menu(db, overwrite=False))
 
 
 if __name__ == "__main__":

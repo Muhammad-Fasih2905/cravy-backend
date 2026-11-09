@@ -1,7 +1,7 @@
 """All money is whole PKR (int). Order items are snapshots."""
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .config import settings as _cfg
@@ -43,7 +43,30 @@ class Product(Base):
     addons: Mapped[list["Addon"]] = relationship(cascade="all, delete-orphan", order_by="Addon.sort_order")
     # Photo slots: slot 1 is the main photo (image_url always mirrors it), the next slots are the extra photos.
     image_rows: Mapped[list["ProductImage"]] = relationship(cascade="all, delete-orphan", order_by="ProductImage.sort_order")
+    # "Frequently bought together": other products the admin suggests next to this one (ordered).
+    pairings: Mapped[list["ProductPairing"]] = relationship(
+        foreign_keys="ProductPairing.product_id", cascade="all, delete-orphan", order_by="ProductPairing.sort_order", back_populates="product")
+    paired_by: Mapped[list["ProductPairing"]] = relationship(  # rows on other products that point here: removed with this product
+        foreign_keys="ProductPairing.paired_id", cascade="all, delete-orphan", back_populates="paired")
     __table_args__ = (Index("ix_products_cat", "category_id", "sort_order"),)
+
+    @property
+    def bundle(self) -> list[dict]:
+        """What the customer sees under "Frequently bought together": available products only, each at its normal price
+        (first available size if it has sizes, after the product's own discount)."""
+        from .discounts import apply_discount
+        out = []
+        for r in self.pairings:
+            q = r.paired
+            if q is None or not q.is_available:
+                continue
+            v = next((x for x in q.variants if x.is_available), None)
+            out.append({
+                "id": q.id, "name": q.name, "slug": q.slug, "image_url": q.image_url,
+                "variant_id": v.id if v else None, "variant_name": v.name if v else None,
+                "price": apply_discount(v.price if v else q.base_price, q.discount_percent),
+            })
+        return out
 
     @property
     def images(self) -> list[str]:
@@ -55,6 +78,18 @@ class Product(Base):
         """Replace all photo slots with `urls` (in order) and keep image_url pointing at the first one."""
         self.image_rows = [ProductImage(url=u, sort_order=i) for i, u in enumerate(urls)]
         self.image_url = urls[0] if urls else None
+
+
+class ProductPairing(Base):
+    """"Frequently bought together": `paired` is suggested on `product`'s card and page. Set by the admin per product."""
+    __tablename__ = "product_pairings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    paired_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    product: Mapped["Product"] = relationship(foreign_keys=[product_id], back_populates="pairings")
+    paired: Mapped["Product"] = relationship(foreign_keys=[paired_id], back_populates="paired_by")
+    __table_args__ = (UniqueConstraint("product_id", "paired_id", name="ux_pairing"),)
 
 
 class ProductImage(Base):

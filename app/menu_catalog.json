@@ -34,412 +34,17 @@
     {
       "id": "milk-shakes",
       "name": "Milk Shakes"
+    },
+    {
+      "id": "waffle",
+      "name": "Waffle"
+    },
+    {
+      "id": "faluda",
+      "name": "Faluda"
     }
   ],
   "products": [
-    {
-      "id": 1,
-      "slug": "mango",
-      "name": "Mango",
-      "category": "ice-cream",
-      "description": "Tropical mango ice cream, bursting with the sweet and tangy essence of ripe mangoes for a vibrant, fruity treat.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/mango.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 1
-    },
-    {
-      "id": 2,
-      "slug": "blue-berry",
-      "name": "Blue Berry",
-      "category": "ice-cream",
-      "description": "Creamy ice cream blended with the tart and sweet flavor of fresh blueberries, creating a refreshing dessert experience.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/blue-berry.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 2
-    },
-    {
-      "id": 3,
-      "slug": "white-vanilla-premium",
-      "name": "White Vanilla Premium",
-      "category": "ice-cream",
-      "description": "A smooth, premium vanilla ice cream with a delicate flavor, crafted from high-quality ingredients for a classic taste.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/white-vanilla-premium.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 3
-    },
-    {
-      "id": 4,
-      "slug": "caramel-crunch",
-      "name": "Caramel Crunch",
-      "category": "ice-cream",
-      "description": "A rich ice cream infused with sweet caramel and delightful crunchy pieces, offering a satisfying texture in every spoonful.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/caramel-crunch.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 4
-    },
-    {
-      "id": 5,
-      "slug": "cheese-cake",
-      "name": "Cheese Cake",
-      "category": "ice-cream",
-      "description": "Smooth cheesecake flavored ice cream swirled with rich graham cracker crust pieces, offering a dessert-inspired delight.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/cheese-cake.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 5
-    },
-    {
-      "id": 6,
-      "slug": "chocolate-chips",
-      "name": "Chocolate Chips",
-      "category": "ice-cream",
-      "description": "Creamy ice cream generously studded with rich, delectable chocolate chips, providing a delightful crunch and cocoa flavor.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/chocolate-chips.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 6
-    },
-    {
-      "id": 7,
-      "slug": "pista-nut",
-      "name": "Pista Nut",
-      "category": "ice-cream",
-      "description": "Smooth, nutty pistachio ice cream, enriched with finely chopped pistachios for a subtle flavor and satisfying texture.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/pista-nut.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 7
-    },
-    {
-      "id": 8,
-      "slug": "king-kulfa",
-      "name": "King Kulfa",
-      "category": "ice-cream",
-      "description": "A dense and creamy traditional south asian ice cream, spiced with cardamom and pistachio, for an aromatic and rich experience.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/king-kulfa.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 8
-    },
-    {
-      "id": 9,
-      "slug": "tutti-frutti",
-      "name": "Tutti Frutti",
-      "category": "ice-cream",
-      "description": "A lively ice cream featuring a medley of candied fruits, offering a colorful and sweet taste in every scoop.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/tutti-frutti.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 9
-    },
-    {
-      "id": 10,
-      "slug": "chocolate-fudge-brownie",
-      "name": "Chocolate Fudge Brownie",
-      "category": "ice-cream",
-      "description": "Rich chocolate ice cream swirled with decadent fudge and chunks of chewy brownie, a deeply satisfying dessert.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/chocolate-fudge-brownie.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 10
-    },
-    {
-      "id": 11,
-      "slug": "strawberry-ripple",
-      "name": "Strawberry Ripple",
-      "category": "ice-cream",
-      "description": "Creamy ice cream swirled with ribbons of sweet and tangy strawberry puree, offering a refreshing fruity twist.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/strawberry-ripple.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 11
-    },
-    {
-      "id": 12,
-      "slug": "oreo",
-      "name": "Oreo",
-      "category": "ice-cream",
-      "description": "Creamy ice cream mixed with crushed oreo cookie pieces, creating a delightful blend of chocolate and cream in each bite.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/oreo.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 12
-    },
-    {
-      "id": 13,
-      "slug": "pine-apple",
-      "name": "Pine Apple",
-      "category": "ice-cream",
-      "description": "Refreshing pineapple ice cream, featuring the sweet and tangy essence of ripe pineapple for a bright, fruity treat.",
-      "price": 139,
-      "currency": "PKR",
-      "image": "products/pine-apple.jpg",
-      "options": [
-        {
-          "name": "Size",
-          "required": true,
-          "values": [
-            {
-              "label": "SINGLE",
-              "value": "single",
-              "additional_price": 0
-            },
-            {
-              "label": "DOUBLE",
-              "value": "double",
-              "additional_price": 80
-            }
-          ]
-        }
-      ],
-      "is_available": true,
-      "is_featured": false,
-      "sort_order": 13
-    },
     {
       "id": 14,
       "slug": "apple-mint-margarita",
@@ -448,7 +53,6 @@
       "description": "A crisp and refreshing non-alcoholic margarita, blending the sweet notes of apple with a cool hint of fresh mint.",
       "price": 249,
       "currency": "PKR",
-      "image": "products/apple-mint-margarita.jpg",
       "options": [
         {
           "name": "Size",
@@ -469,7 +73,10 @@
       ],
       "is_available": true,
       "is_featured": true,
-      "sort_order": 1
+      "sort_order": 1,
+      "images": [
+        "/media/products/82a0a7ff8caea40b9f4d6732a0cc54ab.webp"
+      ]
     },
     {
       "id": 15,
@@ -479,7 +86,6 @@
       "description": "A zesty and refreshing non-alcoholic lemon margarita, blending tart lemon juice with a touch of sweetness.",
       "price": 249,
       "currency": "PKR",
-      "image": "products/lemon-margarita.jpg",
       "options": [
         {
           "name": "Size",
@@ -500,7 +106,10 @@
       ],
       "is_available": true,
       "is_featured": true,
-      "sort_order": 2
+      "sort_order": 2,
+      "images": [
+        "/media/products/3de3c813d257b38d90d86c8fc2bf1ccd.webp"
+      ]
     },
     {
       "id": 16,
@@ -510,7 +119,6 @@
       "description": "A cool and invigorating non-alcoholic mint margarita, combining fresh mint with a refreshing tangy base.",
       "price": 249,
       "currency": "PKR",
-      "image": "products/mint-margarita.jpg",
       "options": [
         {
           "name": "Size",
@@ -531,7 +139,26 @@
       ],
       "is_available": true,
       "is_featured": true,
-      "sort_order": 3
+      "sort_order": 3,
+      "images": [
+        "/media/products/780b7a3d137d034ac285bd3dd3e436cd.webp"
+      ]
+    },
+    {
+      "id": 57,
+      "slug": "black-berry-mojito",
+      "name": "Black Berry Mojito",
+      "category": "mocktails",
+      "description": null,
+      "price": 349,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/3d6411dedc14d68db492d5359de7b95f.webp"
+      ]
     },
     {
       "id": 17,
@@ -541,7 +168,6 @@
       "description": "A refreshing mocktail with a vibrant blue hue, offering a sweet and citrusy blend of flavors.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/blue-lagoon.jpg",
       "options": [
         {
           "name": "Size",
@@ -562,17 +188,19 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 2,
+      "images": [
+        "/media/products/1f0eaf90beac158b4e1421fad7980126.webp"
+      ]
     },
     {
       "id": 18,
       "slug": "sunrise",
-      "name": "Sunrise",
+      "name": "Tequila Sunrise",
       "category": "mocktails",
       "description": "A delightful mocktail with layers of fruity flavors, reminiscent of a colorful sunrise.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/sunrise.jpg",
       "options": [
         {
           "name": "Size",
@@ -593,7 +221,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 3,
+      "images": [
+        "/media/products/c33ae714813d86397397bb9f1f60dd77.webp"
+      ]
     },
     {
       "id": 19,
@@ -603,7 +234,6 @@
       "description": "A refreshing mocktail blending fresh strawberries with mint and lime, topped with sparkling soda.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/strawberry-mojito.jpg",
       "options": [
         {
           "name": "Size",
@@ -624,7 +254,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 3
+      "sort_order": 4,
+      "images": [
+        "/media/products/51e7acf90c36b43431747c49f9256789.webp"
+      ]
     },
     {
       "id": 20,
@@ -634,7 +267,6 @@
       "description": "A sunny mocktail with tropical fruit flavors, creating a sweet and tangy refreshment.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/golden-beach.jpg",
       "options": [
         {
           "name": "Size",
@@ -655,7 +287,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 4
+      "sort_order": 5,
+      "images": [
+        "/media/products/b523ded5f2963aad2729921d11ea59ee.webp"
+      ]
     },
     {
       "id": 21,
@@ -665,7 +300,6 @@
       "description": "A sweet and tangy blend of various fruit juices, offering a burst of tropical flavors.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/fruit-punch.jpg",
       "options": [
         {
           "name": "Size",
@@ -686,7 +320,471 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 5
+      "sort_order": 6,
+      "images": [
+        "/media/products/c6f8e11dafabf82b82b944c84616ff50.webp"
+      ]
+    },
+    {
+      "id": 56,
+      "slug": "choco-luxe",
+      "name": "Choco Luxe",
+      "category": "ice-cream",
+      "description": null,
+      "price": 139,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/ddc3f76be400a91ef9a9043202de7d35.webp"
+      ]
+    },
+    {
+      "id": 1,
+      "slug": "mango",
+      "name": "Mango",
+      "category": "ice-cream",
+      "description": "Tropical mango ice cream, bursting with the sweet and tangy essence of ripe mangoes for a vibrant, fruity treat.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 2,
+      "images": [
+        "/media/products/8fca68ec6384628c2b95960fe1f3aa9d.webp"
+      ]
+    },
+    {
+      "id": 2,
+      "slug": "blue-berry",
+      "name": "Blue Berry",
+      "category": "ice-cream",
+      "description": "Creamy ice cream blended with the tart and sweet flavor of fresh blueberries, creating a refreshing dessert experience.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 3,
+      "images": [
+        "/media/products/08422e65baf1e1b5bd942150f9af9f5e.webp"
+      ]
+    },
+    {
+      "id": 3,
+      "slug": "white-vanilla-premium",
+      "name": "White Vanilla Premium",
+      "category": "ice-cream",
+      "description": "A smooth, premium vanilla ice cream with a delicate flavor, crafted from high-quality ingredients for a classic taste.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 4,
+      "images": [
+        "/media/products/0c8e49740399de30a59e2d474bf036e5.webp"
+      ]
+    },
+    {
+      "id": 4,
+      "slug": "caramel-crunch",
+      "name": "Caramel Crunch",
+      "category": "ice-cream",
+      "description": "A rich ice cream infused with sweet caramel and delightful crunchy pieces, offering a satisfying texture in every spoonful.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 5,
+      "images": [
+        "/media/products/560a5a2b28b947223874a2da77c18cde.webp"
+      ]
+    },
+    {
+      "id": 5,
+      "slug": "cheese-cake",
+      "name": "Cheese Cake",
+      "category": "ice-cream",
+      "description": "Smooth cheesecake flavored ice cream swirled with rich graham cracker crust pieces, offering a dessert-inspired delight.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 6,
+      "images": [
+        "/media/products/438df66afcd9ea4d64648e4e6b1635a9.webp"
+      ]
+    },
+    {
+      "id": 6,
+      "slug": "chocolate-chips",
+      "name": "Chocolate Chips",
+      "category": "ice-cream",
+      "description": "Creamy ice cream generously studded with rich, delectable chocolate chips, providing a delightful crunch and cocoa flavor.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 7,
+      "images": [
+        "/media/products/941724dc8723bf90916e0e5ba50777da.webp"
+      ]
+    },
+    {
+      "id": 7,
+      "slug": "pista-nut",
+      "name": "Pista Nut",
+      "category": "ice-cream",
+      "description": "Smooth, nutty pistachio ice cream, enriched with finely chopped pistachios for a subtle flavor and satisfying texture.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 8,
+      "images": [
+        "/media/products/34db886a2f7bf3feafdb6c118a62f458.webp"
+      ]
+    },
+    {
+      "id": 8,
+      "slug": "king-kulfa",
+      "name": "King Kulfa",
+      "category": "ice-cream",
+      "description": "A dense and creamy traditional south asian ice cream, spiced with cardamom and pistachio, for an aromatic and rich experience.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 9,
+      "images": [
+        "/media/products/47a78ddb6aa08a684897c471247151bd.webp"
+      ]
+    },
+    {
+      "id": 9,
+      "slug": "tutti-frutti",
+      "name": "Tutti Frutti",
+      "category": "ice-cream",
+      "description": "A lively ice cream featuring a medley of candied fruits, offering a colorful and sweet taste in every scoop.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 10,
+      "images": [
+        "/media/products/55bfc2700f50ee695b146c2b4ba1eaa8.webp"
+      ]
+    },
+    {
+      "id": 10,
+      "slug": "chocolate-fudge-brownie",
+      "name": "Chocolate Fudge Brownie",
+      "category": "ice-cream",
+      "description": "Rich chocolate ice cream swirled with decadent fudge and chunks of chewy brownie, a deeply satisfying dessert.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 11,
+      "images": [
+        "/media/products/1ea2b01d7dcfc1ae0792a7af6b184bc8.webp"
+      ]
+    },
+    {
+      "id": 11,
+      "slug": "strawberry-ripple",
+      "name": "Strawberry Ripple",
+      "category": "ice-cream",
+      "description": "Creamy ice cream swirled with ribbons of sweet and tangy strawberry puree, offering a refreshing fruity twist.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 12,
+      "images": [
+        "/media/products/a2ae02251f64008d68c1e9dc1615bc59.webp"
+      ]
+    },
+    {
+      "id": 12,
+      "slug": "oreo",
+      "name": "Oreo",
+      "category": "ice-cream",
+      "description": "Creamy ice cream mixed with crushed oreo cookie pieces, creating a delightful blend of chocolate and cream in each bite.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 13,
+      "images": [
+        "/media/products/4a45f283c2af460d22ef9de1c1350f27.webp"
+      ]
+    },
+    {
+      "id": 13,
+      "slug": "pine-apple",
+      "name": "Pine Apple",
+      "category": "ice-cream",
+      "description": "Refreshing pineapple ice cream, featuring the sweet and tangy essence of ripe pineapple for a bright, fruity treat.",
+      "price": 139,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Size",
+          "required": true,
+          "values": [
+            {
+              "label": "SINGLE",
+              "value": "single",
+              "additional_price": 0
+            },
+            {
+              "label": "DOUBLE",
+              "value": "double",
+              "additional_price": 80
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 14,
+      "images": [
+        "/media/products/726c5f1a1ac85d47860f99cd3648381d.webp"
+      ]
+    },
+    {
+      "id": 58,
+      "slug": "orange-juice",
+      "name": "Orange Juice",
+      "category": "fresh-juices",
+      "description": null,
+      "price": 299,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/eb14455d80e706342a81fd54daccccdc.webp"
+      ]
     },
     {
       "id": 22,
@@ -696,7 +794,6 @@
       "description": "Freshly squeezed carrot juice, offering a naturally sweet and earthy taste.",
       "price": 299,
       "currency": "PKR",
-      "image": "products/carrot-juice.jpg",
       "options": [
         {
           "name": "Size",
@@ -717,7 +814,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 2,
+      "images": [
+        "/media/products/07a6e0a4ac23d8224b0928e8ed1726cd.webp"
+      ]
     },
     {
       "id": 23,
@@ -727,7 +827,6 @@
       "description": "Apple beetroot carrot",
       "price": 349,
       "currency": "PKR",
-      "image": "products/abc-juice.jpg",
       "options": [
         {
           "name": "Size",
@@ -748,7 +847,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 3,
+      "images": [
+        "/media/products/e64bb047a94eceb72e852e0d086a730b.webp"
+      ]
     },
     {
       "id": 24,
@@ -758,7 +860,6 @@
       "description": "Pure, freshly squeezed apple juice, providing a crisp and naturally sweet flavor.",
       "price": 299,
       "currency": "PKR",
-      "image": "products/apple-juice.jpg",
       "options": [
         {
           "name": "Size",
@@ -779,7 +880,26 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 3
+      "sort_order": 4,
+      "images": [
+        "/media/products/44d3253d7bbd20528a6254ed18e438fb.webp"
+      ]
+    },
+    {
+      "id": 51,
+      "slug": "mini-colada",
+      "name": "Mint Colada",
+      "category": "coladas",
+      "description": null,
+      "price": 279,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/88d153bcaf34b9262f81bf4030712045.webp"
+      ]
     },
     {
       "id": 25,
@@ -789,7 +909,6 @@
       "description": "A tropical blend of creamy coconut and sweet pineapple, served chilled as a refreshing non-alcoholic colada.",
       "price": 279,
       "currency": "PKR",
-      "image": "products/pina-colada.jpg",
       "options": [
         {
           "name": "Size",
@@ -810,7 +929,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 2,
+      "images": [
+        "/media/products/0c76ff159ed57147c1a0bfbbd878613a.webp"
+      ]
     },
     {
       "id": 26,
@@ -820,7 +942,6 @@
       "description": "A vibrant, refreshing blue colada, featuring a sweet and exotic fruit blend for a cool, tropical escape.",
       "price": 279,
       "currency": "PKR",
-      "image": "products/blue-colada.jpg",
       "options": [
         {
           "name": "Size",
@@ -841,7 +962,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 3,
+      "images": [
+        "/media/products/6e51282f8cb2e279039bfb6bdeebbd09.webp"
+      ]
     },
     {
       "id": 27,
@@ -851,7 +975,6 @@
       "description": "A crisp and bubbly soda infused with the sweet and slightly tart essence of blueberries.",
       "price": 149,
       "currency": "PKR",
-      "image": "products/blue-berry-soda.jpg",
       "options": [
         {
           "name": "Size",
@@ -872,7 +995,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 1,
+      "images": [
+        "/media/products/ec4009da319e7dec0c78e63f1fb81a03.webp"
+      ]
     },
     {
       "id": 28,
@@ -882,7 +1008,6 @@
       "description": "A sparkling soda with a bright and zesty lemon flavor, offering a refreshing citrus taste.",
       "price": 149,
       "currency": "PKR",
-      "image": "products/lemon.jpg",
       "options": [
         {
           "name": "Size",
@@ -903,7 +1028,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 2,
+      "images": [
+        "/media/products/ab3c9355af6ef8be2ef1cbba20d63c4e.webp"
+      ]
     },
     {
       "id": 29,
@@ -913,7 +1041,6 @@
       "description": "A refreshing soda with the sweet and fruity essence of ripe peaches, offering a light and effervescent beverage experience.",
       "price": 149,
       "currency": "PKR",
-      "image": "products/peach.jpg",
       "options": [
         {
           "name": "Size",
@@ -934,7 +1061,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 3
+      "sort_order": 3,
+      "images": [
+        "/media/products/792130136534c98eae7f8aea5368440f.webp"
+      ]
     },
     {
       "id": 30,
@@ -944,7 +1074,6 @@
       "description": "A crisp and invigorating soda infused with the natural sweetness and tart notes of fresh apples, creating a delightful bubbly drink.",
       "price": 149,
       "currency": "PKR",
-      "image": "products/apple.jpg",
       "options": [
         {
           "name": "Size",
@@ -965,7 +1094,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 4
+      "sort_order": 4,
+      "images": [
+        "/media/products/ccdda481d8d806a5df9c8ae21f6afb09.webp"
+      ]
     },
     {
       "id": 31,
@@ -975,7 +1107,6 @@
       "description": "An energizing soda designed to invigorate, offering a unique and refreshing flavor profile for a revitalizing boost.",
       "price": 149,
       "currency": "PKR",
-      "image": "products/boster-power.jpg",
       "options": [
         {
           "name": "Size",
@@ -996,7 +1127,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 5
+      "sort_order": 5,
+      "images": [
+        "/media/products/53728a47879d5586504c2099b536f021.webp"
+      ]
     },
     {
       "id": 32,
@@ -1006,7 +1140,6 @@
       "description": "A creamy ice cream shake made with ripe bananas, blended to a smooth and delightful consistency.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/banana-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1027,7 +1160,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 1,
+      "images": [
+        "/media/products/2da07437e73d85bdc0b06aebaf6f5fea.webp"
+      ]
     },
     {
       "id": 33,
@@ -1037,7 +1173,6 @@
       "description": "A rich ice cream shake blended with crumbled cookies, offering a delightful textual contrast.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/cookie-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1058,7 +1193,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 2,
+      "images": [
+        "/media/products/a9ea048e99a904836cb79eeeb19edbba.webp"
+      ]
     },
     {
       "id": 34,
@@ -1068,7 +1206,6 @@
       "description": "A decadent ice cream shake crafted with rich chocolate, blended into a velvety smooth beverage.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/chocolate-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1089,7 +1226,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 3
+      "sort_order": 3,
+      "images": [
+        "/media/products/042857ac382d3de2c2252578413ab4ec.webp"
+      ]
     },
     {
       "id": 35,
@@ -1099,7 +1239,6 @@
       "description": "A creamy ice cream shake featuring sweet, fresh strawberries, blended for a smooth texture.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/strawberry-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1120,7 +1259,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 4
+      "sort_order": 4,
+      "images": [
+        "/media/products/50984fbdb4ce81fc697521fb41893f5d.webp"
+      ]
     },
     {
       "id": 36,
@@ -1130,7 +1272,6 @@
       "description": "A chilled coffee blended with ice cream for a smooth, creamy, and invigorating treat.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/cold-coffee.jpg",
       "options": [
         {
           "name": "Size",
@@ -1151,7 +1292,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 5
+      "sort_order": 5,
+      "images": [
+        "/media/products/ca55d0907d69fa2b74e537242f31ba57.webp"
+      ]
     },
     {
       "id": 37,
@@ -1161,7 +1305,6 @@
       "description": "A classic ice cream shake with smooth vanilla flavor, blended to a rich and creamy consistency.",
       "price": 349,
       "currency": "PKR",
-      "image": "products/vanilla-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1182,7 +1325,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 6
+      "sort_order": 6,
+      "images": [
+        "/media/products/840c1f664a08826ad6462d0b8ec37659.webp"
+      ]
     },
     {
       "id": 38,
@@ -1192,7 +1338,6 @@
       "description": "A rich milk shake combining sweet dates and ripe bananas for a naturally flavorful drink.",
       "price": 299,
       "currency": "PKR",
-      "image": "products/banana-dates-shake.jpg",
       "options": [
         {
           "name": "Size",
@@ -1213,7 +1358,10 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 1
+      "sort_order": 1,
+      "images": [
+        "/media/products/dc6d2af449a906043c2182a70514dc27.webp"
+      ]
     },
     {
       "id": 39,
@@ -1223,7 +1371,6 @@
       "description": "A creamy milk shake made with ripe bananas, blended for a smooth and satisfying treat.",
       "price": 249,
       "currency": "PKR",
-      "image": "products/banana-shake-milk-shakes.jpg",
       "options": [
         {
           "name": "Size",
@@ -1244,7 +1391,166 @@
       ],
       "is_available": true,
       "is_featured": false,
-      "sort_order": 2
+      "sort_order": 2,
+      "images": [
+        "/media/products/7668c0817dbe8c88cf0446aa3fb4a856.webp"
+      ]
+    },
+    {
+      "id": 46,
+      "slug": "classic-waffle",
+      "name": "Classic Half Waffle",
+      "category": "waffle",
+      "description": null,
+      "price": 299,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/b0d8eac414252c7d15886f3a7f03233b.webp"
+      ]
+    },
+    {
+      "id": 47,
+      "slug": "loaded-waffle",
+      "name": "Loaded Waffle",
+      "category": "waffle",
+      "description": "A full-sized indulgent waffle designed for dessert lovers, available with multiple ice cream scoops.",
+      "price": 549,
+      "currency": "PKR",
+      "options": [
+        {
+          "name": "Extras",
+          "required": false,
+          "values": [
+            {
+              "label": "With Ice Cream (4 Scoops)",
+              "value": "ice-cream-4-scoops",
+              "additional_price": 200
+            }
+          ]
+        }
+      ],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 2,
+      "images": [
+        "/media/products/737bd11b8fa4c1f269ebfcf4f5a51769.webp"
+      ]
+    },
+    {
+      "id": 52,
+      "slug": "vanilla-cream-waffle",
+      "name": "Vanilla Cream Waffle",
+      "category": "waffle",
+      "description": "A smooth and creamy vanilla topping that complements freshly prepared waffles.",
+      "price": 249,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 3,
+      "images": [
+        "/media/products/bf82a672073924f964bf4904dc9d0645.webp"
+      ]
+    },
+    {
+      "id": 53,
+      "slug": "strawberry-velvet",
+      "name": "Strawberry Velvet",
+      "category": "waffle",
+      "description": null,
+      "price": 249,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 4,
+      "images": [
+        "/media/products/39c7f047d11557f824ed14b3b8c9d6be.webp"
+      ]
+    },
+    {
+      "id": 54,
+      "slug": "blueberry-royale",
+      "name": "Blueberry Royale",
+      "category": "waffle",
+      "description": null,
+      "price": 249,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 5,
+      "images": [
+        "/media/products/027092e7042000f68501c225916b7901.webp"
+      ]
+    },
+    {
+      "id": 55,
+      "slug": "golden-caramel",
+      "name": "Golden Caramel",
+      "category": "waffle",
+      "description": null,
+      "price": 249,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 6,
+      "images": [
+        "/media/products/240ad4ca53d63aa90306739282e78942.webp"
+      ]
+    },
+    {
+      "id": 48,
+      "slug": "faluda-large-matka",
+      "name": "Faluda Large Matka",
+      "category": "faluda",
+      "description": null,
+      "price": 599,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 1,
+      "images": [
+        "/media/products/de8f1b4e404f798c409ff03f91f36cc7.webp"
+      ]
+    },
+    {
+      "id": 49,
+      "slug": "faluda-regular-glass",
+      "name": "Faluda Regular Glass",
+      "category": "faluda",
+      "description": null,
+      "price": 349,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 2,
+      "images": [
+        "/media/products/458a40f4e2cedc3e47cea8a131e3c583.webp"
+      ]
+    },
+    {
+      "id": 50,
+      "slug": "faluda-small-matka",
+      "name": "Faluda Small Matka",
+      "category": "faluda",
+      "description": null,
+      "price": 399,
+      "currency": "PKR",
+      "options": [],
+      "is_available": true,
+      "is_featured": false,
+      "sort_order": 3,
+      "images": [
+        "/media/products/90e9b092fc83a975a7d8533923325da7.webp"
+      ]
     }
   ]
 }

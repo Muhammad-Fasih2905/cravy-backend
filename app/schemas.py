@@ -24,6 +24,17 @@ class AddonOut(Out):
     is_available: bool
 
 
+class BundleItemOut(Out):
+    """One "Frequently bought together" suggestion. It is added to the cart as its own line (product_id + variant_id)."""
+    id: int
+    name: str
+    slug: str
+    image_url: str | None
+    variant_id: int | None = None
+    variant_name: str | None = None
+    price: int  # what the customer pays for it (after its discount)
+
+
 class ProductOut(Out):
     id: int
     category_id: int
@@ -42,6 +53,7 @@ class ProductOut(Out):
     final_base_price: int = 0  # base_price after the discount
     variants: list[VariantOut]
     addons: list[AddonOut]
+    bundle: list[BundleItemOut] = []  # "Frequently bought together"
 
     @model_validator(mode="after")
     def _apply_discount(self):
