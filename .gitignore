@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
-.env
 .venv/
 cravy.db
+config.bat
+node_modules
