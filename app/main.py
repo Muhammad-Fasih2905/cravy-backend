@@ -1,4 +1,3 @@
-import utils.session
 import logging
 
 from fastapi import FastAPI
