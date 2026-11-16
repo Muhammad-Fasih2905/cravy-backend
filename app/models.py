@@ -1,7 +1,7 @@
 """All money is whole PKR (int). Order items are snapshots."""
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .config import settings as _cfg
@@ -102,6 +102,17 @@ class ProductImage(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
     url: Mapped[str] = mapped_column(String(500))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class StoredFile(Base):
+    """An uploaded file (product photo / payment screenshot) kept inside the database (STORAGE_BACKEND=db),
+    so it survives redeploys on hosts with a temporary disk."""
+    __tablename__ = "stored_files"
+    subdir: Mapped[str] = mapped_column(String(20), primary_key=True)  # "products" or "receipts"
+    name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    content_type: Mapped[str] = mapped_column(String(60), default="application/octet-stream")
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class AppMeta(Base):

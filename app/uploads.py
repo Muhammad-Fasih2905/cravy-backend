@@ -1,10 +1,9 @@
 """Upload validation by file signature (never trust the filename or Content-Type)."""
 import secrets
-from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 
-from .config import settings
+from . import storage
 
 
 def _ext(head: bytes, allow_pdf: bool, webp_only: bool = False) -> str | None:
@@ -26,8 +25,6 @@ async def save_upload(file: UploadFile, subdir: str, max_mb: int, allow_pdf: boo
         if webp_only:
             raise HTTPException(422, "Product images must be in WebP format (.webp)")
         raise HTTPException(422, "Unsupported file type. Use JPG, PNG or WEBP" + (" or PDF." if allow_pdf else "."))
-    folder = Path(settings.upload_dir) / subdir
-    folder.mkdir(parents=True, exist_ok=True)
     name = secrets.token_hex(16) + ext
-    (folder / name).write_bytes(data)
+    storage.put(subdir, name, data)
     return name

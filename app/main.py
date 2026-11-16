@@ -49,8 +49,20 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Idempotency-Key", "Authorization"],
 )
-Path(settings.upload_dir, "products").mkdir(parents=True, exist_ok=True)
-app.mount("/media/products", StaticFiles(directory=Path(settings.upload_dir) / "products"), name="product-media")  # receipts are NOT served
+if settings.storage_backend.strip().lower() == "db":  # photos live in the database, so a redeploy never loses them
+    from fastapi import HTTPException
+    from fastapi.responses import Response
+    from . import storage
+
+    @app.get("/media/products/{name}", include_in_schema=False)
+    def _product_media(name: str):
+        got = storage.get("products", name)
+        if got is None:
+            raise HTTPException(404, "Not found")
+        return Response(got[0], media_type=got[1], headers={"Cache-Control": "public, max-age=31536000, immutable"})  # names are random: a changed photo gets a new name
+else:
+    Path(settings.upload_dir, "products").mkdir(parents=True, exist_ok=True)
+    app.mount("/media/products", StaticFiles(directory=Path(settings.upload_dir) / "products"), name="product-media")  # receipts are NOT served
 app.include_router(catalog.router)
 app.include_router(orders.router)
 app.include_router(admin.router)
@@ -92,8 +104,8 @@ def _bootstrap_data():
     from .security import hash_password
 
     with SessionLocal() as db:
-        if db.scalar(select(models.Category.id).limit(1)) is None:
-            seed.run()
+        if db.scalar(select(models.Category.id).limit(1)) is None and not settings.is_production:
+            seed.run()  # demo menu + DEMO10 coupon: local/dev only, never on the live database
         try:  # the real Cravy menu; only if it is not in yet (see app/menu_seed.py)
             from . import menu_seed
             menu_seed.ensure_menu(db)

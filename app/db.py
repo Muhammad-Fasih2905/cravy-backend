@@ -58,10 +58,30 @@ def _resolve_url() -> str:
     return "sqlite:///./cravy.db"
 
 
+def check_environment(url: str, production: bool, allow_remote_dev: bool = False) -> None:
+    """Keep the live data and the local/test data apart.
+    * production + SQLite  -> stop: a SQLite file on the host is wiped on every deploy (that is how live data gets lost).
+    * development + remote database -> stop: your PC (tests, seeds, experiments) must never write into the live database."""
+    u = make_url(url)
+    is_sqlite = u.get_backend_name() == "sqlite"
+    if production and is_sqlite:
+        raise RuntimeError(
+            "APP_ENV=production but DATABASE_URL is missing/invalid, so the app would use a temporary SQLite file "
+            "and lose all data on the next deploy. Set DATABASE_URL to your Postgres (Neon) connection string."
+        )
+    if not production and not is_sqlite and (u.host or "") not in ("localhost", "127.0.0.1", "::1") and not allow_remote_dev:
+        raise RuntimeError(
+            f"Refusing to start: this is a development run (APP_ENV is not 'production') but DATABASE_URL points at "
+            f"the remote database '{u.host}'. Use sqlite:///./cravy.db locally. Set APP_ENV=production on the live host."
+        )
+
+
 _url = _resolve_url()
+check_environment(_url, settings.is_production, settings.allow_remote_db_in_dev)
 
 _args = {"check_same_thread": False} if _url.startswith("sqlite") else {}
-engine = create_engine(_url, connect_args=_args, pool_pre_ping=True)
+_pool = {} if _url.startswith("sqlite") else {"pool_recycle": 240}  # Neon suspends idle connections; renew them before that
+engine = create_engine(_url, connect_args=_args, pool_pre_ping=True, **_pool)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -20,6 +20,7 @@ from ..discounts import apply_discount
 from ..payments import PK_MOBILE
 from ..pricing import get_settings
 from ..uploads import save_upload
+from .. import storage
 from ..realtime import broker, publish_order
 from ..security import get_admin, get_admin_flex, is_super_admin, make_token, verify_password
 from ..serializers import order_detail as _detail
@@ -291,7 +292,10 @@ def get_receipt(n: str, _: models.AdminUser = Depends(get_admin_flex), db: Sessi
     o = _order(db, n)
     if not o.payment.receipt_path:
         raise HTTPException(404, "No receipt uploaded")
-    return FileResponse(Path(cfg.upload_dir) / "receipts" / o.payment.receipt_path)
+    got = storage.get("receipts", o.payment.receipt_path)
+    if got is None:
+        raise HTTPException(404, "The receipt file is missing")
+    return Response(got[0], media_type=got[1])
 
 
 @router.get("/categories")

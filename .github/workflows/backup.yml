@@ -1,0 +1,18 @@
+name: weekly-db-backup
+on:
+  schedule:
+    - cron: "0 2 * * 0"   # every Sunday
+  workflow_dispatch: {}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump the live database
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}   # plain postgresql://... string from Neon
+        run: docker run --rm postgres:17 pg_dump "$DATABASE_URL" --no-owner -Fc > cravy-$(date +%F).dump
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cravy-db-backup
+          path: cravy-*.dump
+          retention-days: 90
