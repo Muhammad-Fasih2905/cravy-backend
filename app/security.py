@@ -31,6 +31,13 @@ def make_token(uid: int, ttl: int = 8 * 3600) -> str:
     return f"{p}.{_sig(p)}"
 
 
+def is_super_admin(admin: models.AdminUser) -> bool:
+    """The super admin is the account named by ADMIN_EMAIL. Only it may log in and use the admin panel.
+    (If ADMIN_EMAIL is not set at all, every active admin is accepted, as before.)"""
+    owner = (settings.admin_email or "").strip().lower()
+    return not owner or admin.email.strip().lower() == owner
+
+
 def _admin_from_token(raw: str, db: Session) -> models.AdminUser:
     try:
         uid, exp, sig = raw.removeprefix("Bearer ").strip().split(".")
@@ -39,7 +46,7 @@ def _admin_from_token(raw: str, db: Session) -> models.AdminUser:
         admin = db.get(models.AdminUser, int(uid))
     except Exception:
         raise HTTPException(401, "Not authenticated")
-    if admin is None or not admin.is_active:
+    if admin is None or not admin.is_active or not is_super_admin(admin):
         raise HTTPException(401, "Not authenticated")
     return admin
 

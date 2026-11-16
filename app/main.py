@@ -54,6 +54,25 @@ app.mount("/media/products", StaticFiles(directory=Path(settings.upload_dir) / "
 app.include_router(catalog.router)
 app.include_router(orders.router)
 app.include_router(admin.router)
+try:  # Django-style admin site at /admin (super admin only); if it cannot start, the API still runs
+    from .superadmin import setup_superadmin
+    setup_superadmin(app)
+except Exception as _exc:  # noqa: BLE001
+    logging.exception("Super admin site (/admin) could not start; the API is not affected")
+    _admin_err = f"{type(_exc).__name__}: {_exc}"
+
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/admin", include_in_schema=False)
+    @app.get("/admin/", include_in_schema=False)
+    def _admin_unavailable():
+        return HTMLResponse(
+            "<h2>Super admin site could not start</h2>"
+            f"<pre>{_admin_err}</pre>"
+            "<p>Fix: stop the server, then run <code>pip install -r requirements.txt</code> "
+            "(needs sqladmin, itsdangerous, starlette==0.41.3, greenlet) and start again.</p>",
+            status_code=503,
+        )
 
 @app.on_event("startup")
 def _create_tables_for_dev():

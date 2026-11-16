@@ -21,7 +21,7 @@ from ..payments import PK_MOBILE
 from ..pricing import get_settings
 from ..uploads import save_upload
 from ..realtime import broker, publish_order
-from ..security import get_admin, get_admin_flex, make_token, verify_password
+from ..security import get_admin, get_admin_flex, is_super_admin, make_token, verify_password
 from ..serializers import order_detail as _detail
 from ..slip import render_slip
 
@@ -44,9 +44,9 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(429, "Too many attempts. Try again in a minute.")
     _attempts[ip].append(time.time())
     a = db.scalar(select(models.AdminUser).where(models.AdminUser.email == data.email.strip().lower()))
-    if a is None or not a.is_active or not verify_password(data.password, a.password_hash):
-        raise HTTPException(401, "Wrong email or password")
-    return {"token": make_token(a.id)}
+    if a is None or not a.is_active or not verify_password(data.password, a.password_hash) or not is_super_admin(a):
+        raise HTTPException(401, "Wrong email or password")  # a non-super admin gets the same answer: nothing is revealed
+    return {"token": make_token(a.id), "role": "superadmin"}
 
 
 @router.get("/stats")

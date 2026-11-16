@@ -21,6 +21,9 @@ class Category(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     products: Mapped[list["Product"]] = relationship(back_populates="category", order_by="Product.sort_order")
 
+    def __str__(self) -> str:  # shown in the /admin site's lists and drop-downs
+        return self.name
+
 
 class Product(Base):
     __tablename__ = "products"
