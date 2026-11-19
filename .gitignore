@@ -4,10 +4,7 @@ __pycache__/
 cravy.db
 config.bat
 node_modules
-.env
-.env.*
 !.env.example
 venv/
 *.db
 uploads/*
-.vscode/
