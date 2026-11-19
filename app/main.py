@@ -1,4 +1,3 @@
-import utils.transport
 import logging
 
 from fastapi import FastAPI
