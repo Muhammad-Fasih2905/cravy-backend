@@ -95,6 +95,17 @@ class ProductPairing(Base):
     __table_args__ = (UniqueConstraint("product_id", "paired_id", name="ux_pairing"),)
 
 
+class WaffleTopping(Base):
+    """A free waffle choice the admin manages: a topping or an ice-cream flavour (name, photo, on/off, order). Never priced."""
+    __tablename__ = "waffle_toppings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60))
+    image_url: Mapped[str | None] = mapped_column(String(500))
+    is_available: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(10), default="TOPPING", server_default="TOPPING")  # TOPPING | ICECREAM (a free ice-cream flavour)
+
+
 class ProductImage(Base):
     """One photo slot of a product (WebP, stored under /media/products). sort_order 0 is the main photo."""
     __tablename__ = "product_images"

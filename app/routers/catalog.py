@@ -52,3 +52,17 @@ def public_settings(db: Session = Depends(get_db)):
 def delivery_rates():
     """The fixed delivery price list (by distance from the shop). Same rates for every order."""
     return {"max_km": MAX_KM, "rates": rates_table()}
+
+
+@router.get("/waffle-options")
+def waffle_options(response: Response, db: Session = Depends(get_db)):
+    """Free choices for every waffle: toppings and ice-cream flavours, both managed by the admin. Never priced."""
+    response.headers["Cache-Control"] = "no-cache"
+    W = models.WaffleTopping
+    rows = db.scalars(select(W).where(W.is_available).order_by(W.sort_order, W.id)).all()
+    tops = [r for r in rows if r.kind != "ICECREAM"]
+    flav = [r for r in rows if r.kind == "ICECREAM"]
+    return {
+        "toppings": [{"id": t.id, "name": t.name, "image_url": t.image_url} for t in tops],
+        "flavours": [{"id": f.id, "name": f.name, "image_url": f.image_url} for f in flav],
+    }

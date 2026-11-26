@@ -5,7 +5,9 @@ import secrets
 import time
 from pathlib import Path
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date as Date, datetime, timedelta, timezone
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
@@ -76,6 +78,133 @@ def stats(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db
         "bestsellers": [{"name": n, "quantity": int(q)} for n, q in top],
         "daily_sales": [{"date": (start - timedelta(days=d)).date().isoformat(),
                          "total": daily.get((start - timedelta(days=d)).date().isoformat(), 0)} for d in range(6, -1, -1)],
+    }
+
+
+SHOP_TZ = timezone(timedelta(hours=5))  # Pakistan time (no daylight saving): a day ends at local midnight, not UTC midnight
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _shop_dt(dt: datetime) -> datetime:
+    """A stored time as shop-local time (SQLite hands back naive UTC times)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(SHOP_TZ)
+
+
+def _shop_date(dt: datetime):
+    return _shop_dt(dt).date()
+
+
+def _hour_label(h: int) -> str:
+    return f"{h % 12 or 12}{'a' if h < 12 else 'p'}"
+
+
+@router.get("/sales")
+def sales(year: int | None = Query(None, ge=2000, le=2100), month: int | None = Query(None, ge=0, le=12),
+          days: int | None = Query(None, ge=1, le=90), day: Date | None = Query(None, alias="date"),
+          _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    """Money received (COMPLETED orders, by completion day, shop time) for the dashboard chart.
+    ?year=2026&month=11 -> one bar per day | ?year=2026 (or month=0) -> one bar per month | ?days=7 -> last 7 days
+    | ?date=2026-11-20 -> one bar per hour plus the list of that day's orders.
+    No parameters = the current month. Always read straight from the database, so it is as live as the orders."""
+    O = models.Order
+    today = datetime.now(SHOP_TZ).date()
+
+    def window(start, end):  # inclusive shop-local dates -> {date: [total, orders]}
+        lo = datetime(start.year, start.month, start.day, tzinfo=SHOP_TZ).astimezone(timezone.utc)
+        nxt = end + timedelta(days=1)
+        hi = datetime(nxt.year, nxt.month, nxt.day, tzinfo=SHOP_TZ).astimezone(timezone.utc)
+        rows = db.execute(select(O.completed_at, O.total).where(O.status == "COMPLETED", O.completed_at >= lo, O.completed_at < hi)).all()
+        out: dict = defaultdict(lambda: [0, 0])
+        for at, total in rows:
+            cell = out[_shop_date(at)]
+            cell[0] += total
+            cell[1] += 1
+        return out
+
+    def month_bounds(y, m):
+        first = datetime(y, m, 1).date()
+        last = (datetime(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)).date()
+        return first, last
+
+    if day is not None:
+        mode, start, end = "day", day, day
+        prev_start = prev_end = day - timedelta(days=1)
+    elif days:
+        mode, start, end = "days", today - timedelta(days=days - 1), today
+        prev_start, prev_end = start - timedelta(days=days), start - timedelta(days=1)
+    elif year is not None and not month:
+        mode, start, end = "year", datetime(year, 1, 1).date(), datetime(year, 12, 31).date()
+        prev_start, prev_end = datetime(year - 1, 1, 1).date(), datetime(year - 1, 12, 31).date()
+    else:
+        y, m = (year, month) if year is not None and month else (today.year, today.month)
+        mode, (start, end) = "month", month_bounds(y, m)
+        py, pm = (y - 1, 12) if m == 1 else (y, m - 1)
+        prev_start, prev_end = month_bounds(py, pm)
+
+    partial = mode != "day" and start <= today < end  # the period is still running: compare it with the same stretch of the previous period, not a whole one
+    if partial and mode == "month":
+        prev_end = min(prev_end, prev_start + (today - start))
+    elif partial and mode == "year":
+        try:
+            prev_end = today.replace(year=start.year - 1)
+        except ValueError:  # 29 February
+            prev_end = today.replace(year=start.year - 1, day=28)
+
+    orders_list: list = []
+    points = []
+    if mode == "day":
+        lo = datetime(start.year, start.month, start.day, tzinfo=SHOP_TZ).astimezone(timezone.utc)
+        rows = db.scalars(
+            select(O).options(selectinload(O.items), selectinload(O.payment))
+            .where(O.status == "COMPLETED", O.completed_at >= lo, O.completed_at < lo + timedelta(days=1)).order_by(O.completed_at)
+        ).all()
+        hours = [[0, 0] for _ in range(24)]
+        for o in rows:
+            local = _shop_dt(o.completed_at)
+            hours[local.hour][0] += o.total
+            hours[local.hour][1] += 1
+            orders_list.append({
+                "order_number": o.order_number, "time": local.strftime("%H:%M"), "total": o.total, "customer": o.customer_name,
+                "method": o.payment.method if o.payment else None,
+                "items": ", ".join(f"{i.product_name} x{i.quantity}" for i in o.items)[:140],
+            })
+        now_h = datetime.now(SHOP_TZ).hour
+        points = [{"key": f"{start.isoformat()}T{h:02d}", "label": _hour_label(h), "total": hours[h][0], "orders": hours[h][1],
+                   "future": start > today or (start == today and h > now_h)} for h in range(24)]
+        partial = start == today
+    elif mode == "year":
+        got = window(start, end)
+        for m in range(1, 13):
+            tot = sum(v[0] for d, v in got.items() if d.month == m)
+            cnt = sum(v[1] for d, v in got.items() if d.month == m)
+            points.append({"key": f"{start.year}-{m:02d}", "label": MONTHS[m - 1], "total": tot, "orders": cnt, "future": (start.year, m) > (today.year, today.month)})
+    else:
+        got = window(start, end)
+        d = start
+        while d <= end:
+            tot, cnt = got.get(d, (0, 0))
+            points.append({"key": d.isoformat(), "label": str(d.day), "total": tot, "orders": cnt, "future": d > today})
+            d += timedelta(days=1)
+
+    total = sum(p["total"] for p in points)
+    orders_n = sum(p["orders"] for p in points)
+    prev_total = sum(v[0] for v in window(prev_start, prev_end).values())
+    best = max((p for p in points if p["total"] > 0), key=lambda p: p["total"], default=None)
+    first = db.scalar(select(func.min(O.completed_at)).where(O.status == "COMPLETED"))
+    first_date = _shop_date(first) if first else None
+    return {
+        "mode": mode, "year": start.year, "month": start.month if mode in ("month", "day") else 0, "days": days,
+        "date": start.isoformat() if mode == "day" else None, "orders_list": orders_list,
+        "points": points, "total": total, "orders": orders_n,
+        "average_order": round(total / orders_n) if orders_n else 0,
+        "best": {"key": best["key"], "label": best["label"], "total": best["total"]} if best else None,
+        "previous_total": prev_total, "partial": partial,
+        "change_percent": round((total - prev_total) * 100 / prev_total, 1) if prev_total else None,
+        "first_sale": {"year": first_date.year, "month": first_date.month} if first_date else None,
+        "years": list(range(first_date.year, today.year + 1)) if first_date else [today.year],
+        "today": today.isoformat(), "current": {"year": today.year, "month": today.month},
     }
 
 
@@ -507,3 +636,82 @@ def put_bundle(pid: int, data: BundleIn, _: models.AdminUser = Depends(get_admin
             p.pairings.append(models.ProductPairing(paired_id=i, sort_order=n))
     db.commit()
     return _bundle_out(_bundle_product(db, pid))
+
+
+# ---- free waffle toppings (the admin adds / renames / hides / reorders / deletes them; ice-cream flavours come from the Ice Cream category) ----
+class ToppingIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    is_available: bool = True
+    kind: Literal["TOPPING", "ICECREAM"] = "TOPPING"
+
+
+class ToppingPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    is_available: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=1000)
+
+
+def _topping_out(t: models.WaffleTopping) -> dict:
+    return {"id": t.id, "name": t.name, "image_url": t.image_url, "is_available": t.is_available, "sort_order": t.sort_order, "kind": t.kind}
+
+
+def _topping(db: Session, tid: int) -> models.WaffleTopping:
+    t = db.get(models.WaffleTopping, tid)
+    if t is None:
+        raise HTTPException(404, "Topping not found")
+    return t
+
+
+@router.get("/waffle-toppings")
+def list_toppings(_: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    return [_topping_out(t) for t in db.scalars(select(models.WaffleTopping).order_by(models.WaffleTopping.sort_order, models.WaffleTopping.id))]
+
+
+@router.post("/waffle-toppings", status_code=201)
+def create_topping(data: ToppingIn, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(422, "Give the topping a name")
+    last = db.scalar(select(func.max(models.WaffleTopping.sort_order))) or 0
+    t = models.WaffleTopping(name=name, is_available=data.is_available, sort_order=last + 1, kind=data.kind)
+    db.add(t)
+    db.commit()
+    return _topping_out(t)
+
+
+@router.patch("/waffle-toppings/{tid}")
+def patch_topping(tid: int, data: ToppingPatch, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    t = _topping(db, tid)
+    if data.name is not None:
+        if not data.name.strip():
+            raise HTTPException(422, "Give the topping a name")
+        t.name = data.name.strip()
+    if data.is_available is not None:
+        t.is_available = data.is_available
+    if data.sort_order is not None:
+        t.sort_order = data.sort_order
+    db.commit()
+    return _topping_out(t)
+
+
+@router.delete("/waffle-toppings/{tid}")
+def delete_topping(tid: int, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    db.delete(_topping(db, tid))  # past orders keep the text they were placed with
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/waffle-toppings/{tid}/image")
+async def topping_image(tid: int, file: UploadFile = File(...), _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    t = _topping(db, tid)
+    t.image_url = f"/media/products/{await save_upload(file, 'products', 3, webp_only=True)}"
+    db.commit()
+    return _topping_out(t)
+
+
+@router.delete("/waffle-toppings/{tid}/image")
+def topping_image_delete(tid: int, _: models.AdminUser = Depends(get_admin), db: Session = Depends(get_db)):
+    t = _topping(db, tid)
+    t.image_url = None
+    db.commit()
+    return _topping_out(t)

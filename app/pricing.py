@@ -1,4 +1,5 @@
 """Server-side pricing. The client's prices are never trusted: only ids and quantities."""
+import re
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -44,6 +45,60 @@ def load_coupon(db: Session, code: str, subtotal: int) -> models.Coupon:
     return c
 
 
+def is_waffle(p: models.Product) -> bool:
+    slug = (p.category.slug if p.category else "").lower().replace("-", "").replace("_", "")
+    return slug in ("waffle", "waffles")
+
+
+def scoops_for(variant_name: str | None, addon_names: list[str]) -> tuple[int, bool]:
+    """How many free ice-cream scoops this waffle choice includes: read from the chosen size / add-on name,
+    e.g. "With Ice Cream (4 Scoops)" -> (4, True), "Without Ice Cream" -> (0, True). A waffle that mentions neither
+    gets (1, False): one scoop that the customer may take or skip."""
+    names = [n.lower() for n in ([variant_name] if variant_name else []) + addon_names]
+    for n in names:
+        m = re.search(r"(\d+)\s*scoops?", n)
+        if m:
+            return int(m.group(1)), True
+    if any("without" in n or "no ice" in n for n in names):
+        return 0, True
+    return 1, False
+
+
+def _free_choices(db: Session, p: models.Product, item, scoops: int, exact: bool) -> list[dict]:
+    """Validate the customer's free toppings / ice-cream flavours and return them as price-0 add-on lines."""
+    out: list[dict] = []
+    if not is_waffle(p):
+        if item.toppings or item.flavours:
+            raise HTTPException(422, f"{p.name} has no toppings or ice-cream choices")
+        return out
+    ids = list(dict.fromkeys(item.toppings))
+    if ids:
+        rows = {t.id: t for t in db.scalars(select(models.WaffleTopping).where(models.WaffleTopping.id.in_(ids)))}
+        for tid in ids:
+            t = rows.get(tid)
+            if t is None or not t.is_available:
+                raise HTTPException(422, "A topping you chose is not available any more")
+            out.append({"name": f"Topping: {t.name}", "price": 0})
+    picks: dict[int, int] = {}
+    for f in item.flavours:
+        picks[f.id] = picks.get(f.id, 0) + f.qty
+    total = sum(picks.values())
+    if scoops == 0:
+        if total:
+            raise HTTPException(422, "This waffle comes without ice cream")
+    elif (total != scoops) if exact else (total > scoops):
+        raise HTTPException(422, f"Please choose {'exactly ' if exact else 'up to '}{scoops} ice-cream scoop{'s' if scoops != 1 else ''} for {p.name}")
+    if picks:
+        W = models.WaffleTopping
+        prods = {x.id: x for x in db.scalars(select(W).where(W.id.in_(list(picks)), W.kind == "ICECREAM"))}
+        for fid, qty in picks.items():
+            x = prods.get(fid)
+            if x is None or not x.is_available:
+                raise HTTPException(422, "An ice-cream flavour you chose is not available any more")
+            out.append({"name": f"Ice cream: {x.name}" + (f" x{qty}" if qty > 1 else ""), "price": 0})
+    return out
+
+
 def build_quote(db: Session, data: QuoteIn, require_location: bool = False) -> tuple[QuoteOut, models.Coupon | None]:
     ids = {i.product_id for i in data.items}
     products = {
@@ -51,7 +106,7 @@ def build_quote(db: Session, data: QuoteIn, require_location: bool = False) -> t
         for p in db.scalars(
             select(models.Product)
             .where(models.Product.id.in_(ids))
-            .options(selectinload(models.Product.variants), selectinload(models.Product.addons))
+            .options(selectinload(models.Product.variants), selectinload(models.Product.addons), selectinload(models.Product.category))
         )
     }
     lines: list[QuoteLine] = []
@@ -72,6 +127,7 @@ def build_quote(db: Session, data: QuoteIn, require_location: bool = False) -> t
             if a is None:
                 raise HTTPException(422, f"Invalid add-on for {p.name}")
             chosen.append({"name": a.name, "price": a.price})
+        chosen += _free_choices(db, p, item, *scoops_for(variant.name if variant else None, [a["name"] for a in chosen]))
         unit = apply_discount(variant.price if variant else p.base_price, p.discount_percent) + sum(a["price"] for a in chosen)
         lines.append(QuoteLine(
             product_id=p.id, product_name=p.name, variant_name=variant.name if variant else None,

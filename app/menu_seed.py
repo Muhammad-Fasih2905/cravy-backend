@@ -177,6 +177,40 @@ def ensure_default_pairings(db: Session) -> None:
     db.commit()
 
 
+TOPPING_SEED_KEY = "waffle_toppings_seed_v1"
+DEFAULT_TOPPINGS = ["Vanilla Cream Waffle", "Strawberry Velvet", "Blueberry Royale", "Golden Caramel", "Choco Luxe"]
+
+
+def ensure_default_toppings(db: Session) -> None:
+    """Runs once ever: the first free waffle toppings. After that the admin owns the list (deleting one is never undone)."""
+    if db.get(models.AppMeta, TOPPING_SEED_KEY) is not None:
+        return
+    if not db.scalar(select(models.WaffleTopping.id).where(models.WaffleTopping.kind == "TOPPING").limit(1)):
+        for i, n in enumerate(DEFAULT_TOPPINGS, 1):
+            db.add(models.WaffleTopping(name=n, sort_order=i))
+    db.add(models.AppMeta(key=TOPPING_SEED_KEY, value="1"))
+    db.commit()
+
+
+FLAVOUR_SEED_KEY = "waffle_flavours_seed_v1"
+
+
+def ensure_default_flavours(db: Session) -> None:
+    """Runs once ever: the ice-cream flavours offered on waffles start as a copy of the Ice Cream category (name + photo).
+    After that the admin owns the list in the "Waffle options" tab. Skipped (and retried next start) while that category is empty."""
+    if db.get(models.AppMeta, FLAVOUR_SEED_KEY) is not None:
+        return
+    cat = db.scalar(select(models.Category).where(models.Category.slug == "ice-cream"))
+    prods = [p for p in cat.products if p.is_available] if cat else []
+    if not prods:
+        return
+    if not db.scalar(select(models.WaffleTopping.id).where(models.WaffleTopping.kind == "ICECREAM").limit(1)):
+        for i, p in enumerate(prods, 1):
+            db.add(models.WaffleTopping(name=p.name, image_url=p.image_url, kind="ICECREAM", sort_order=i))
+    db.add(models.AppMeta(key=FLAVOUR_SEED_KEY, value="1"))
+    db.commit()
+
+
 def ensure_menu(db: Session) -> None:
     """Startup hook.
     * No real product yet: import the whole menu.

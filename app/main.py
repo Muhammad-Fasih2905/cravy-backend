@@ -40,7 +40,7 @@ app.add_middleware(NoStore)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 # Websites allowed to call this API from the browser. The live shop is always allowed, on top of whatever
 # CORS_ORIGINS lists (comma separated). A trailing "/" is ignored: browsers send the origin without it.
-LIVE_SITE_ORIGINS = {"https://eatcravy.com", "https://www.eatcravy.com", "http://eatcravy.com", "http://www.eatcravy.com", "https://eatcravy.netlify.app"}
+LIVE_SITE_ORIGINS = {"https://eatcravy.netlify.app"}
 CORS_ALLOWED = sorted({o.strip().rstrip("/") for o in settings.cors_origins.split(",") if o.strip()} | LIVE_SITE_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
@@ -110,6 +110,8 @@ def _bootstrap_data():
             from . import menu_seed
             menu_seed.ensure_menu(db)
             menu_seed.ensure_default_pairings(db)
+            menu_seed.ensure_default_toppings(db)
+            menu_seed.ensure_default_flavours(db)
         except Exception:  # noqa: BLE001
             db.rollback()
             logging.exception("Menu import failed (the site keeps running)")

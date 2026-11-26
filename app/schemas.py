@@ -86,10 +86,17 @@ class PublicSettings(Out):
     easypaisa_number: str | None
 
 
+class FlavourPick(BaseModel):
+    id: int  # an ice-cream product id
+    qty: int = Field(ge=1, le=10)
+
+
 class CartLineIn(BaseModel):
     product_id: int
     variant_id: int | None = None
     addon_ids: list[int] = Field(default_factory=list, max_length=20)
+    toppings: list[int] = Field(default_factory=list, max_length=20)  # free waffle toppings (WaffleTopping ids)
+    flavours: list[FlavourPick] = Field(default_factory=list, max_length=20)  # free ice-cream scoops (waffles only)
     quantity: int = Field(ge=1, le=50)
 
 
